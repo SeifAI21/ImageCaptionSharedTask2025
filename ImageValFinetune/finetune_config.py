@@ -6,7 +6,7 @@ import os
 
 # Model configuration
 DEFAULT_MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
-IMAGE_MAX_PIXELS = 131072
+IMAGE_MAX_PIXELS = 65536
 
 # Training configuration
 TRAINING_CONFIG = {
@@ -30,7 +30,7 @@ TRAINING_CONFIG = {
     "val_size": 0.2,
     "per_device_eval_batch_size": 1,
     "eval_strategy": "steps",
-    "eval_steps": 10,
+    "eval_steps": 50,
     
     # Logging and saving
     "logging_steps": 5,
@@ -51,10 +51,13 @@ TRAINING_CONFIG = {
 CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()
 CONSERVATIVE_CONFIG.update({
     "lora_rank": 4,
-    "gradient_accumulation_steps": 32,
+    "gradient_accumulation_steps": 64,
     "per_device_train_batch_size": 1,
     "preprocessing_num_workers": 1,
     "dataloader_num_workers": 0,
+    "cutoff_len": 128,  # Reduce from 256 to 128
+    "eval_steps": 100,  # Reduce evaluation frequency
+
 })
 
 # Paths (adjust these according to your setup)
