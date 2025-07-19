@@ -6,7 +6,7 @@ import os
 
 # Model configuration
 DEFAULT_MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
-IMAGE_MAX_PIXELS = 131072
+IMAGE_MAX_PIXELS = 65536
 
 # Training configuration
 TRAINING_CONFIG = {
