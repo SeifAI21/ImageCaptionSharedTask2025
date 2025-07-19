@@ -50,7 +50,7 @@ TRAINING_CONFIG = {
 # Conservative settings for limited VRAM
 CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()
 CONSERVATIVE_CONFIG.update({
-    "lora_rank": 4,
+    "lora_rank": 2,
     "gradient_accumulation_steps": 128,
     "per_device_train_batch_size": 1,
     "preprocessing_num_workers": 1,
