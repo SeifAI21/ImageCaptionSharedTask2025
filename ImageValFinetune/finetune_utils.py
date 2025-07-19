@@ -15,28 +15,37 @@ import finetune_config as config
 def check_system_requirements():
     """Check GPU availability and system requirements."""
     print("=== System Requirements Check ===")
-    
+
     # Check CUDA
     cuda_available = torch.cuda.is_available()
     print(f"CUDA available: {cuda_available}")
-    
+
     if cuda_available:
-        gpu_name = torch.cuda.get_device_name(0)
-        gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
-        print(f"GPU: {gpu_name}")
-        print(f"GPU Memory: {gpu_memory:.1f} GB")
-        
-        if gpu_memory < 12:
+        num_gpus = torch.cuda.device_count()
+        print(f"Number of GPUs: {num_gpus}")
+
+        total_memory = 0
+        for i in range(num_gpus):
+            gpu_name = torch.cuda.get_device_name(i)
+            gpu_memory = torch.cuda.get_device_properties(i).total_memory / 1e9
+            print(f"GPU {i}: {gpu_name} ({gpu_memory:.1f} GB)")
+            total_memory += gpu_memory
+
+        print(f"Total GPU Memory: {total_memory:.1f} GB")
+
+        if num_gpus > 1:
+            print("✅ Multi-GPU setup detected - will use distributed training")
+        elif total_memory < 12:
             print("⚠️ Warning: Less than 12GB VRAM. Consider using conservative settings.")
         else:
             print("✅ Sufficient GPU memory for training")
     else:
         print("❌ CUDA not available. GPU required for fine-tuning.")
         return False
-    
+
     # Check PyTorch version
     print(f"PyTorch version: {torch.__version__}")
-    
+
     return True
 
 

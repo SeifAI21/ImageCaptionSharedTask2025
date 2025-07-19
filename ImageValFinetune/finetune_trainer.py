@@ -154,14 +154,63 @@ class ArabicImageCaptionTrainer:
         with open(config_path, 'w') as f:
             f.write('\n'.join(lines))
     
-    def start_training(self, config_path: str) -> bool:
+    # def start_training(self, config_path: str) -> bool:
+    #     """
+    #     Start the training process.
+        
+    #     Args:
+    #         config_path: Path to training configuration file
+    #     """
+    #     print("=== Starting Training ===")
+        
+    #     if not os.path.exists(config_path):
+    #         print(f"❌ Config file not found: {config_path}")
+    #         return False
+        
+    #     try:
+    #         # Change to LlamaFactory directory
+    #         original_cwd = os.getcwd()
+    #         os.chdir(self.llamafactory_path)
+            
+    #         # Start training
+    #         cmd = ["llamafactory-cli", "train", config_path]
+    #         print(f"Running command: {' '.join(cmd)}")
+            
+    #         result = subprocess.run(cmd, check=True, capture_output=False)
+            
+    #         os.chdir(original_cwd)
+            
+    #         print("✅ Training completed successfully")
+    #         return True
+            
+    #     except subprocess.CalledProcessError as e:
+    #         print(f"❌ Training failed: {e}")
+    #         os.chdir(original_cwd)
+    #         return False
+
+    def start_training(self, config_path: str, num_gpus: int = None) -> bool:
         """
         Start the training process.
         
         Args:
             config_path: Path to training configuration file
+            num_gpus: Number of GPUs to use (auto-detect if None)
         """
         print("=== Starting Training ===")
+        
+        # Auto-detect number of GPUs if not specified
+        if num_gpus is None:
+            num_gpus = torch.cuda.device_count()
+        
+        print(f"Using {num_gpus} GPU(s) for training")
+        
+        # Set environment variables for multi-GPU training
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+        
+        # Clear any existing CUDA cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         if not os.path.exists(config_path):
             print(f"❌ Config file not found: {config_path}")
@@ -172,8 +221,20 @@ class ArabicImageCaptionTrainer:
             original_cwd = os.getcwd()
             os.chdir(self.llamafactory_path)
             
-            # Start training
-            cmd = ["llamafactory-cli", "train", config_path]
+            # Build command based on number of GPUs
+            if num_gpus > 1:
+                # Use torchrun for multi-GPU training
+                cmd = [
+                    "torchrun",
+                    f"--nproc_per_node={num_gpus}",
+                    "--master_port=29500",
+                    "-m", "llamafactory.train.tuner",
+                    "--config", config_path
+                ]
+            else:
+                # Single GPU training
+                cmd = ["llamafactory-cli", "train", config_path]
+            
             print(f"Running command: {' '.join(cmd)}")
             
             result = subprocess.run(cmd, check=True, capture_output=False)
@@ -187,6 +248,8 @@ class ArabicImageCaptionTrainer:
             print(f"❌ Training failed: {e}")
             os.chdir(original_cwd)
             return False
+
+
     
     def list_checkpoints(self) -> List[str]:
         """List available model checkpoints."""

@@ -134,6 +134,8 @@ lr_scheduler_type: {lr_scheduler_type}
 warmup_ratio: {warmup_ratio}
 fp16: {fp16}
 gradient_checkpointing: {gradient_checkpointing}
+ddp_backend: nccl
+ddp_find_unused_parameters: false
 
 ### eval
 val_size: {val_size}
