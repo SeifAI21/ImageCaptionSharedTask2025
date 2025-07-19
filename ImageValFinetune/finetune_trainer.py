@@ -162,6 +162,12 @@ class ArabicImageCaptionTrainer:
             config_path: Path to training configuration file
         """
         print("=== Starting Training ===")
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+    
+    # Clear any existing CUDA cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         if not os.path.exists(config_path):
             print(f"❌ Config file not found: {config_path}")
