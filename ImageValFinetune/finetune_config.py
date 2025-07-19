@@ -6,7 +6,7 @@ import os
 
 # Model configuration
 DEFAULT_MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
-IMAGE_MAX_PIXELS = 65536
+IMAGE_MAX_PIXELS = 131072
 
 # Training configuration
 TRAINING_CONFIG = {
@@ -41,7 +41,7 @@ TRAINING_CONFIG = {
     "report_to": "none",
     
     # Data processing
-    "cutoff_len": 1024,
+    "cutoff_len": 256,
     "overwrite_cache": True,
     "preprocessing_num_workers": 2,
     "dataloader_num_workers": 0,
