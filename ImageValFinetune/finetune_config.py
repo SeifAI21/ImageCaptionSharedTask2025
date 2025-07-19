@@ -5,7 +5,7 @@ Configuration file for Arabic Image Captioning Fine-tuning
 import os
 
 # Model configuration
-DEFAULT_MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
+DEFAULT_MODEL_NAME = "Qwen/Qwen2.5-VL-3B-Instruct"
 IMAGE_MAX_PIXELS = 131072
 
 # Training configuration
@@ -23,14 +23,14 @@ TRAINING_CONFIG = {
     "num_train_epochs": 15.0,
     "lr_scheduler_type": "cosine",
     "warmup_ratio": 0.1,
-    "fp16": True,
+    "fp16": False,
     "gradient_checkpointing": True,
     
     # Evaluation
     "val_size": 0.2,
     "per_device_eval_batch_size": 1,
     "eval_strategy": "steps",
-    "eval_steps": 100,
+    "eval_steps": 10,
     
     # Logging and saving
     "logging_steps": 5,
@@ -41,7 +41,7 @@ TRAINING_CONFIG = {
     "report_to": "none",
     
     # Data processing
-    "cutoff_len": 256,
+    "cutoff_len": 1024,
     "overwrite_cache": True,
     "preprocessing_num_workers": 2,
     "dataloader_num_workers": 0,
@@ -50,8 +50,8 @@ TRAINING_CONFIG = {
 # Conservative settings for limited VRAM
 CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()
 CONSERVATIVE_CONFIG.update({
-    "lora_rank": 2,
-    "gradient_accumulation_steps": 128,
+    "lora_rank": 4,
+    "gradient_accumulation_steps": 32,
     "per_device_train_batch_size": 1,
     "preprocessing_num_workers": 1,
     "dataloader_num_workers": 0,
@@ -99,6 +99,7 @@ model_name_or_path: {model_name}
 image_max_pixels: {image_max_pixels}
 trust_remote_code: true
 
+
 ### method
 stage: sft
 do_train: true
@@ -134,8 +135,6 @@ lr_scheduler_type: {lr_scheduler_type}
 warmup_ratio: {warmup_ratio}
 fp16: {fp16}
 gradient_checkpointing: {gradient_checkpointing}
-ddp_backend: nccl
-ddp_find_unused_parameters: false
 
 ### eval
 val_size: {val_size}

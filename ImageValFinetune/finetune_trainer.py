@@ -11,6 +11,7 @@ import torch
 from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 from PIL import Image
 from tqdm import tqdm
+from torchvision.transforms import functional as F
 
 import finetune_config as config
 import finetune_utils as utils
@@ -154,63 +155,14 @@ class ArabicImageCaptionTrainer:
         with open(config_path, 'w') as f:
             f.write('\n'.join(lines))
     
-    # def start_training(self, config_path: str) -> bool:
-    #     """
-    #     Start the training process.
-        
-    #     Args:
-    #         config_path: Path to training configuration file
-    #     """
-    #     print("=== Starting Training ===")
-        
-    #     if not os.path.exists(config_path):
-    #         print(f"❌ Config file not found: {config_path}")
-    #         return False
-        
-    #     try:
-    #         # Change to LlamaFactory directory
-    #         original_cwd = os.getcwd()
-    #         os.chdir(self.llamafactory_path)
-            
-    #         # Start training
-    #         cmd = ["llamafactory-cli", "train", config_path]
-    #         print(f"Running command: {' '.join(cmd)}")
-            
-    #         result = subprocess.run(cmd, check=True, capture_output=False)
-            
-    #         os.chdir(original_cwd)
-            
-    #         print("✅ Training completed successfully")
-    #         return True
-            
-    #     except subprocess.CalledProcessError as e:
-    #         print(f"❌ Training failed: {e}")
-    #         os.chdir(original_cwd)
-    #         return False
-
-    def start_training(self, config_path: str, num_gpus: int = None) -> bool:
+    def start_training(self, config_path: str) -> bool:
         """
         Start the training process.
         
         Args:
             config_path: Path to training configuration file
-            num_gpus: Number of GPUs to use (auto-detect if None)
         """
         print("=== Starting Training ===")
-        
-        # Auto-detect number of GPUs if not specified
-        if num_gpus is None:
-            num_gpus = torch.cuda.device_count()
-        
-        print(f"Using {num_gpus} GPU(s) for training")
-        
-        # Set environment variables for multi-GPU training
-        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-        
-        # Clear any existing CUDA cache
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
         
         if not os.path.exists(config_path):
             print(f"❌ Config file not found: {config_path}")
@@ -221,20 +173,8 @@ class ArabicImageCaptionTrainer:
             original_cwd = os.getcwd()
             os.chdir(self.llamafactory_path)
             
-            # Build command based on number of GPUs
-            if num_gpus > 1:
-                # Use torchrun for multi-GPU training
-                cmd = [
-                    "torchrun",
-                    f"--nproc_per_node={num_gpus}",
-                    "--master_port=29500",
-                    "-m", "llamafactory.train.tuner",
-                    "--config", config_path
-                ]
-            else:
-                # Single GPU training
-                cmd = ["llamafactory-cli", "train", config_path]
-            
+            # Start training
+            cmd = ["llamafactory-cli", "train", config_path]
             print(f"Running command: {' '.join(cmd)}")
             
             result = subprocess.run(cmd, check=True, capture_output=False)
@@ -248,8 +188,6 @@ class ArabicImageCaptionTrainer:
             print(f"❌ Training failed: {e}")
             os.chdir(original_cwd)
             return False
-
-
     
     def list_checkpoints(self) -> List[str]:
         """List available model checkpoints."""
@@ -304,10 +242,13 @@ class ArabicImageCaptionTrainer:
         # Load model and processor
         try:
             print("Loading fine-tuned model...")
+            bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_use_double_quant=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16
+            )
+
+            # Load model and tokenizer
             model = Qwen2VLForConditionalGeneration.from_pretrained(
-                checkpoint_path,
-                torch_dtype=torch.bfloat16,
-                device_map="auto"
+                checkpoint_path, device_map="auto", torch_dtype=torch.bfloat16, quantization_config=bnb_config
             )
             processor = AutoProcessor.from_pretrained(config.DEFAULT_MODEL_NAME)
             print("✅ Model loaded successfully")
@@ -367,8 +308,10 @@ class ArabicImageCaptionTrainer:
         processor
     ) -> Dict:
         """Process a single image and generate caption."""
-        image = Image.open(image_path)
-        
+        image = Image.open(image_path).convert("RGB")
+        image = F.resize(image, (512, 512))
+        torch.cuda.empty_cache()
+
         # Create prompt
         messages = [
             {
@@ -379,21 +322,22 @@ class ArabicImageCaptionTrainer:
                 ]
             }
         ]
-        
+
         # Process and generate
         text = processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
         inputs = processor(text=[text], images=[image], return_tensors="pt", padding=True)
         inputs = inputs.to("cuda")
-        
-        with torch.no_grad():
+
+        model.eval().half()
+        with torch.inference_mode():
             outputs = model.generate(
                 **inputs,
                 pad_token_id=processor.tokenizer.eos_token_id,
                 **config.GENERATION_CONFIG
             )
-        
+
         response = processor.decode(outputs[0], skip_special_tokens=True)
         
         # Extract caption
