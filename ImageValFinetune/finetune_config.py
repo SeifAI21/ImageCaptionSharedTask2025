@@ -49,20 +49,20 @@ TRAINING_CONFIG = {
 
 # Conservative settings for limited VRAM
 # Conservative settings for limited VRAM
+# Conservative settings for limited VRAM
 CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()
 CONSERVATIVE_CONFIG.update({
-    "lora_rank": 2,  # Reduce from 4 to 2
+    "lora_rank": 2,  # Reduce from 8 to 2
     "lora_alpha": 4,  # Reduce from 16 to 4
-    "gradient_accumulation_steps": 128,  # Increase from 64 to 128
+    "gradient_accumulation_steps": 128,  # Increase from 16 to 128
     "per_device_train_batch_size": 1,
-    "preprocessing_num_workers": 0,  # Reduce from 1 to 0
+    "preprocessing_num_workers": 1,  # Change from 0 to 1 (minimum required)
     "dataloader_num_workers": 0,
-    "cutoff_len": 64,  # Reduce from 128 to 64
+    "cutoff_len": 64,  # Reduce from 256 to 64
     "eval_steps": 200,  # Reduce evaluation frequency
     "save_steps": 100,  # Reduce save frequency
     "logging_steps": 20,  # Reduce logging frequency
 })
-
 # Paths (adjust these according to your setup)
 DEFAULT_PATHS = {
     "base_dir": "/content/drive/MyDrive/ImageVal",
