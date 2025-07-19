@@ -6,7 +6,7 @@ import os
 
 # Model configuration
 DEFAULT_MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
-IMAGE_MAX_PIXELS = 65536
+IMAGE_MAX_PIXELS = 131072
 
 # Training configuration
 TRAINING_CONFIG = {
@@ -30,7 +30,7 @@ TRAINING_CONFIG = {
     "val_size": 0.2,
     "per_device_eval_batch_size": 1,
     "eval_strategy": "steps",
-    "eval_steps": 50,
+    "eval_steps": 100,
     
     # Logging and saving
     "logging_steps": 5,
@@ -48,21 +48,15 @@ TRAINING_CONFIG = {
 }
 
 # Conservative settings for limited VRAM
-# Conservative settings for limited VRAM
-# Conservative settings for limited VRAM
 CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()
 CONSERVATIVE_CONFIG.update({
-    "lora_rank": 2,  # Reduce from 8 to 2
-    "lora_alpha": 4,  # Reduce from 16 to 4
-    "gradient_accumulation_steps": 128,  # Increase from 16 to 128
+    "lora_rank": 4,
+    "gradient_accumulation_steps": 128,
     "per_device_train_batch_size": 1,
-    "preprocessing_num_workers": 1,  # Change from 0 to 1 (minimum required)
+    "preprocessing_num_workers": 1,
     "dataloader_num_workers": 0,
-    "cutoff_len": 64,  # Reduce from 256 to 64
-    "eval_steps": 200,  # Reduce evaluation frequency
-    "save_steps": 100,  # Reduce save frequency
-    "logging_steps": 20,  # Reduce logging frequency
 })
+
 # Paths (adjust these according to your setup)
 DEFAULT_PATHS = {
     "base_dir": "/content/drive/MyDrive/ImageVal",
