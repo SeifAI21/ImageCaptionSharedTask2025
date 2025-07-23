@@ -6,7 +6,8 @@ import json
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from transformers import AdamW, get_cosine_schedule_with_warmup
+from torch.optim import AdamW  
+from transformers import get_cosine_schedule_with_warmup
 from peft import LoraConfig, get_peft_model
 import pandas as pd
 from PIL import Image
@@ -71,17 +72,20 @@ class ArabicFlamingoTrainer:
     
     def __init__(
         self,
-        base_dir: str = "/content/drive/MyDrive/ImageVal",
+        base_dir: str = "/kaggle/working",  # FIXED: Updated default path
         model_name: str = "aubmindlab/aragpt2-mega"
     ):
         self.base_dir = base_dir
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
+        print(f"🔄 Using device: {self.device}")
+        
         # Apply cross-attention patch
         apply_cross_attention_patch()
         
         # Initialize model
+        print("🔄 Initializing Arabic Flamingo model...")
         self.model = ArabicFlamingoModel(lang_model_path=model_name)
         self.tokenizer = self.model.tokenizer
         self.image_processor = self.model.image_processor
@@ -134,17 +138,23 @@ class ArabicFlamingoTrainer:
         os.makedirs(output_dir, exist_ok=True)
         
         print("🚀 Starting Arabic Flamingo training...")
+        print(f"📊 Dataset: {dataset_path}")
+        print(f"📊 Output: {output_dir}")
+        print(f"📊 Epochs: {num_epochs}, Batch size: {batch_size}, LR: {learning_rate}")
         
         # Setup LoRA
         self.setup_lora()
         
         # Create dataset
+        print("📚 Loading dataset...")
         dataset = FlamingoDataset(dataset_path, self.tokenizer, self.image_processor)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        print(f"📚 Dataset loaded: {len(dataset)} samples")
         
         # Setup optimizer and scheduler
+        trainable_params = [p for p in self.model.parameters() if p.requires_grad]
         optimizer = AdamW(
-            [p for p in self.model.parameters() if p.requires_grad],
+            trainable_params,
             lr=learning_rate,
             weight_decay=0.01
         )
@@ -155,6 +165,9 @@ class ArabicFlamingoTrainer:
             num_warmup_steps=num_training_steps // 10,
             num_training_steps=num_training_steps
         )
+        
+        print(f"🔧 Optimizer: AdamW with {len(trainable_params)} trainable parameter groups")
+        print(f"🔧 Scheduler: Cosine with {num_training_steps} total steps")
         
         # Training loop
         self.model.train()
@@ -167,44 +180,50 @@ class ArabicFlamingoTrainer:
             progress_bar = tqdm(dataloader, desc=f"Training Epoch {epoch + 1}")
             
             for batch_idx, batch in enumerate(progress_bar):
-                # Move batch to device
-                batch = {k: v.to(self.device) for k, v in batch.items()}
+                try:
+                    # Move batch to device
+                    batch = {k: v.to(self.device) for k, v in batch.items()}
+                    
+                    # Forward pass
+                    outputs = self.model(
+                        input_ids=batch['input_ids'],
+                        attention_mask=batch['attention_mask'],
+                        images=batch['images'],
+                        labels=batch['labels']
+                    )
+                    
+                    loss = outputs.loss
+                    
+                    # Backward pass
+                    loss.backward()
+                    
+                    # Gradient clipping
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    
+                    optimizer.step()
+                    scheduler.step()
+                    optimizer.zero_grad()
+                    
+                    # Update metrics
+                    epoch_loss += loss.item()
+                    total_loss += loss.item()
+                    
+                    # Update progress bar
+                    progress_bar.set_postfix({
+                        'loss': f"{loss.item():.4f}",
+                        'avg_loss': f"{epoch_loss / (batch_idx + 1):.4f}",
+                        'lr': f"{scheduler.get_last_lr()[0]:.2e}"
+                    })
+                    
+                    # Save checkpoint every 50 steps
+                    if (batch_idx + 1) % 50 == 0:
+                        checkpoint_dir = os.path.join(output_dir, f"checkpoint-{epoch}-{batch_idx}")
+                        self.save_model(checkpoint_dir)
+                        print(f"💾 Checkpoint saved: step {batch_idx + 1}")
                 
-                # Forward pass
-                outputs = self.model(
-                    input_ids=batch['input_ids'],
-                    attention_mask=batch['attention_mask'],
-                    images=batch['images'],
-                    labels=batch['labels']
-                )
-                
-                loss = outputs.loss
-                
-                # Backward pass
-                loss.backward()
-                
-                # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                
-                optimizer.step()
-                scheduler.step()
-                optimizer.zero_grad()
-                
-                # Update metrics
-                epoch_loss += loss.item()
-                total_loss += loss.item()
-                
-                # Update progress bar
-                progress_bar.set_postfix({
-                    'loss': f"{loss.item():.4f}",
-                    'avg_loss': f"{epoch_loss / (batch_idx + 1):.4f}",
-                    'lr': f"{scheduler.get_last_lr()[0]:.2e}"
-                })
-                
-                # Save checkpoint every 50 steps
-                if (batch_idx + 1) % 50 == 0:
-                    checkpoint_dir = os.path.join(output_dir, f"checkpoint-{epoch}-{batch_idx}")
-                    self.save_model(checkpoint_dir)
+                except Exception as e:
+                    print(f"❌ Error in batch {batch_idx}: {e}")
+                    continue
             
             # Save epoch checkpoint
             epoch_dir = os.path.join(output_dir, f"epoch-{epoch + 1}")
@@ -225,7 +244,6 @@ class ArabicFlamingoTrainer:
         # Save the full model state
         torch.save({
             'model_state_dict': self.model.state_dict(),
-            'tokenizer': self.tokenizer,
             'config': {
                 'model_name': self.model_name,
                 'base_dir': self.base_dir
@@ -261,32 +279,3 @@ class ArabicFlamingoTrainer:
             )
         
         return caption
-
-# Example usage
-def main():
-    """Example training script"""
-    
-    # Initialize trainer
-    trainer = ArabicFlamingoTrainer(
-        base_dir="/content/drive/MyDrive/ImageVal",
-        model_name="aubmindlab/aragpt2-mega"
-    )
-    
-    # Train model
-    trainer.train(
-        dataset_path="/content/drive/MyDrive/ImageVal/arabic_captions_flamingo_aragpt2.json",
-        num_epochs=3,
-        batch_size=1,
-        learning_rate=5e-6
-    )
-    
-    # Test caption generation
-    caption = trainer.generate_caption(
-        image_path="/path/to/test/image.jpg",
-        prompt="وصف هذه الصورة بالتفصيل:"
-    )
-    
-    print(f"Generated caption: {caption}")
-
-if __name__ == "__main__":
-    main()
