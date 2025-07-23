@@ -17,7 +17,7 @@ FLAMINGO_CONFIG = {
     "perceiver_num_latents": 64,
     "perceiver_depth": 6,
     "vision_dim": 1024,  # CLIP-Large dimension
-    "lang_dim": 1536,    # AraGPT2-mega dimension (corrected from 1024)
+    "lang_dim": 1536,    # AraGPT2-mega dimension
 }
 
 # Training configuration for Custom Flamingo
@@ -64,19 +64,23 @@ DATASET_CONFIG = {
     "max_length": 512,
 }
 
-# Default paths
+# Default paths - FIXED for Kaggle
 DEFAULT_PATHS = {
-    "base_dir": "/kaggle/working",  # Changed for Kaggle
-    "train_excel": "/kaggle/input/your-dataset/TrainSubtask2.xlsx",  # Update this
-    "train_images_dir": "/kaggle/input/your-dataset/images",  # Update this
-    "test_images_dir": "/kaggle/input/your-dataset/test_images",  # Update this
+    "base_dir": "/kaggle/working",
+    "llamafactory_repo": "/kaggle/working/LLaMA-Factory",  # ADD THIS LINE
+    "train_excel": "/kaggle/input/trainsubtask2/TrainSubtask2.xlsx",  # UPDATED
+    "train_images_dir": "/kaggle/working/Train/images",  # UPDATED
+    "test_images_dir": "/kaggle/working/Test/images",
     "output_dir": "/kaggle/working/arabic_flamingo_model",
     "dataset_json": "/kaggle/working/arabic_flamingo_dataset.json"
 }
 
 SUPPORTED_IMAGE_FORMATS = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
 
-# YAML template for LlamaFactory - UPDATED FOR FLAMINGO
+# IMAGE_MAX_PIXELS for compatibility
+IMAGE_MAX_PIXELS = 224 * 224
+
+# YAML template (kept for compatibility)
 YAML_TEMPLATE = """### model
 model_name_or_path: {model_name}
 template: {template}
