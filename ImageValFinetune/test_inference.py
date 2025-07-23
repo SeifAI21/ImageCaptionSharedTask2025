@@ -39,7 +39,7 @@ class BaseFlamingoInference:
         print("✅ Base model loaded and ready for inference!")
         print("📝 Note: This is the base model without fine-tuning")
     
-# Update the generate_caption method in BaseFlamingoInference class:
+# Update the generate_caption method (around line 42):
 
     def generate_caption(self, image_path: str, prompt: str = "وصف هذه الصورة:") -> str:
         """Generate Arabic caption for an image using base model"""
@@ -48,11 +48,10 @@ class BaseFlamingoInference:
         
         try:
             with torch.no_grad():
+                # FIXED: Remove unsupported parameters
                 caption = self.model.generate_caption(
                     image_path=image_path,
-                    prompt=prompt,
-                    max_new_tokens=50,      # Shorter for base model
-                    temperature=0.8         # Remove top_p and do_sample - not supported
+                    prompt=prompt
                 )
             return caption.strip()
         except Exception as e:
