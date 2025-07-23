@@ -1,5 +1,5 @@
 """
-Test inference with trained Flamingo model
+Test inference with base Flamingo model (no fine-tuning checkpoint needed)
 """
 import os
 import torch
@@ -8,55 +8,39 @@ import argparse
 from arabic_flamingo_model import ArabicFlamingoModel, apply_cross_attention_patch
 import finetune_config as config
 
-class FlamingoInference:
-    """Simple inference class for trained Flamingo model"""
+class BaseFlamingoInference:
+    """Inference class for base Flamingo model (no checkpoint required)"""
     
-    def __init__(self, checkpoint_path: str):
-        """Initialize inference with trained checkpoint"""
+    def __init__(self, model_name: str = None):
+        """Initialize inference with base pre-trained model"""
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"🔄 Loading Flamingo model from: {checkpoint_path}")
+        
+        # Use provided model or default
+        self.model_name = model_name or config.DEFAULT_MODEL_NAME
+        
+        print(f"🔄 Loading BASE Flamingo model...")
+        print(f"Language Model: {self.model_name}")
+        print(f"Vision Model: {config.VISION_MODEL_NAME}")
         print(f"Device: {self.device}")
         
         # Apply cross-attention patch
         apply_cross_attention_patch()
         
-        # Initialize model
+        # Initialize model with base weights only
         self.model = ArabicFlamingoModel(
-            lang_model_path=config.DEFAULT_MODEL_NAME,
+            lang_model_path=self.model_name,
             vision_encoder_path=config.VISION_MODEL_NAME
         )
         
-        # Load checkpoint
-        self.load_checkpoint(checkpoint_path)
-        
-        # Set to eval mode
+        # Move to device and set to eval mode
         self.model = self.model.to(self.device)
         self.model.eval()
         
-        print("✅ Model loaded and ready for inference!")
-    
-    def load_checkpoint(self, checkpoint_path: str):
-        """Load trained weights"""
-        if os.path.isdir(checkpoint_path):
-            # Look for .pt files in directory
-            pt_files = [f for f in os.listdir(checkpoint_path) if f.endswith('.pt')]
-            if pt_files:
-                checkpoint_file = os.path.join(checkpoint_path, pt_files[0])
-            else:
-                raise FileNotFoundError(f"No .pt files found in {checkpoint_path}")
-        else:
-            checkpoint_file = checkpoint_path
-        
-        print(f"Loading weights from: {checkpoint_file}")
-        checkpoint = torch.load(checkpoint_file, map_location=self.device)
-        
-        if 'model_state_dict' in checkpoint:
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-        else:
-            self.model.load_state_dict(checkpoint)
+        print("✅ Base model loaded and ready for inference!")
+        print("📝 Note: This is the base model without fine-tuning")
     
     def generate_caption(self, image_path: str, prompt: str = "وصف هذه الصورة:") -> str:
-        """Generate Arabic caption for an image"""
+        """Generate Arabic caption for an image using base model"""
         if not os.path.exists(image_path):
             return f"❌ Image not found: {image_path}"
         
@@ -65,9 +49,10 @@ class FlamingoInference:
                 caption = self.model.generate_caption(
                     image_path=image_path,
                     prompt=prompt,
-                    max_new_tokens=100,
-                    temperature=0.7,
-                    do_sample=True
+                    max_new_tokens=50,      # Shorter for base model
+                    temperature=0.8,        # Slightly higher temperature
+                    do_sample=True,
+                    top_p=0.9
                 )
             return caption.strip()
         except Exception as e:
@@ -86,14 +71,16 @@ class FlamingoInference:
                 print("(Image display not available)")
         
         # Generate caption
+        print("🔄 Generating caption with BASE model...")
         caption = self.generate_caption(image_path)
         print(f"📝 Generated Caption: {caption}")
         
         return caption
     
-    def test_multiple_images(self, image_dir: str, max_images: int = 5):
+    def test_multiple_images(self, image_dir: str, max_images: int = 3):
         """Test inference on multiple images"""
         print(f"\n🖼️  Testing multiple images from: {image_dir}")
+        print("📝 Using BASE model (no fine-tuning)")
         print("=" * 60)
         
         # Get image files
@@ -113,50 +100,80 @@ class FlamingoInference:
         
         return results
     
-    def interactive_test(self):
-        """Interactive testing mode"""
-        print("\n🎮 Interactive Testing Mode")
-        print("Enter image path (or 'quit' to exit):")
+    def compare_model_sizes(self):
+        """Compare different AraGPT2 model sizes"""
+        models_to_test = [
+            "aubmindlab/aragpt2-medium",
+            "aubmindlab/aragpt2-large", 
+            "aubmindlab/aragpt2-mega"
+        ]
         
-        while True:
-            image_path = input("\nImage path: ").strip()
-            
-            if image_path.lower() in ['quit', 'exit', 'q']:
-                break
-            
-            if not image_path:
-                continue
-            
-            self.test_single_image(image_path)
+        print("\n🔍 Comparing different AraGPT2 model sizes:")
+        print("=" * 60)
+        
+        # Find a test image
+        test_images_dir = "/kaggle/working/Train/images"
+        if os.path.exists(test_images_dir):
+            image_files = [f for f in os.listdir(test_images_dir) if f.lower().endswith(('.jpg', '.png'))]
+            if image_files:
+                test_image = os.path.join(test_images_dir, image_files[0])
+                print(f"🖼️  Test image: {image_files[0]}")
+                
+                for model_name in models_to_test:
+                    try:
+                        print(f"\n📝 Testing {model_name.split('/')[-1].upper()}:")
+                        
+                        # Initialize model
+                        temp_inferencer = BaseFlamingoInference(model_name)
+                        
+                        # Generate caption
+                        caption = temp_inferencer.generate_caption(test_image)
+                        print(f"   Result: {caption}")
+                        
+                        # Clean up
+                        del temp_inferencer
+                        torch.cuda.empty_cache()
+                        
+                    except Exception as e:
+                        print(f"   ❌ Error with {model_name}: {e}")
+            else:
+                print("❌ No test images found")
+        else:
+            print(f"❌ Test images directory not found: {test_images_dir}")
 
 
 def main():
     """Main function for command-line usage"""
-    parser = argparse.ArgumentParser(description="Test Flamingo model inference")
-    parser.add_argument("--checkpoint", type=str, required=True, help="Path to checkpoint")
+    parser = argparse.ArgumentParser(description="Test BASE Flamingo model inference (no checkpoint)")
+    parser.add_argument("--model", type=str, help="Model name (default: config default)")
     parser.add_argument("--image", type=str, help="Single image path")
     parser.add_argument("--image_dir", type=str, help="Directory with multiple images")
-    parser.add_argument("--interactive", action="store_true", help="Interactive mode")
-    parser.add_argument("--max_images", type=int, default=5, help="Max images to test")
+    parser.add_argument("--compare_models", action="store_true", help="Compare different model sizes")
+    parser.add_argument("--max_images", type=int, default=3, help="Max images to test")
     
     args = parser.parse_args()
     
-    # Initialize inference
+    # Initialize base model inference
     try:
-        inferencer = FlamingoInference(args.checkpoint)
+        inferencer = BaseFlamingoInference(args.model)
     except Exception as e:
-        print(f"❌ Failed to load model: {e}")
+        print(f"❌ Failed to load base model: {e}")
+        import traceback
+        traceback.print_exc()
         return
     
     # Run tests
-    if args.interactive:
-        inferencer.interactive_test()
+    if args.compare_models:
+        inferencer.compare_model_sizes()
     elif args.image:
         inferencer.test_single_image(args.image)
     elif args.image_dir:
         inferencer.test_multiple_images(args.image_dir, args.max_images)
     else:
-        print("Please specify --image, --image_dir, or --interactive")
+        print("Please specify --image, --image_dir, or --compare_models")
+        print("\nExample usage:")
+        print("  python test_base_inference.py --image_dir /kaggle/working/Train/images")
+        print("  python test_base_inference.py --compare_models")
 
 
 if __name__ == "__main__":
