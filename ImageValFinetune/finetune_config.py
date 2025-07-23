@@ -47,34 +47,47 @@ TRAINING_CONFIG = {
     "logging_steps": 10,
 }
 
+# Conservative settings - FIXED for anti-overfitting
 CONSERVATIVE_CONFIG = {
     "lora_rank": 4,
     "lora_alpha": 8,
     "lora_dropout": 0.3,
     "gradient_accumulation_steps": 64,  # INCREASED from 32
-    "learning_rate": 5e-7,
+    "learning_rate": 5e-7,              # Much lower to prevent overfitting
     "batch_size": 1,                    # KEEP at 1
-    "weight_decay": 0.1,
+    "weight_decay": 0.1,                # Higher regularization
     "warmup_ratio": 0.3,
     
     # Memory optimization
     "fp16": True,
-    "gradient_checkpointing": True,     # ADD this
+    "gradient_checkpointing": True,
+    
+    # Anti-overfitting settings
+    "save_steps": 500,                  # Less frequent saves
+    "eval_steps": 100,
+    "logging_steps": 10,
+    "gradient_clipping": 0.5,           # Stronger clipping
 }
-# Dataset configuration for Custom Flamingo
+
+# Dataset configuration for Custom Flamingo - FIXED
 DATASET_CONFIG = {
     "name": "arabic_flamingo_dataset",
+    "template": "default",              # ADDED: Missing template key
     "image_token": "<image>",
     "prompt_template": "<image> وصف هذه الصورة:",
     "max_length": 512,
+    "cutoff_len": 512,                  # ADDED: For compatibility
+    "overwrite_cache": True,            # ADDED: For compatibility
+    "preprocessing_num_workers": 1,     # ADDED: For compatibility
+    "dataloader_num_workers": 0,        # ADDED: For compatibility
 }
 
 # Default paths - FIXED for Kaggle
 DEFAULT_PATHS = {
     "base_dir": "/kaggle/working",
-    "llamafactory_repo": "/kaggle/working/LLaMA-Factory",  # ADD THIS LINE
-    "train_excel": "/kaggle/input/trainsubtask2/TrainSubtask2.xlsx",  # UPDATED
-    "train_images_dir": "/kaggle/working/Train/images",  # UPDATED
+    "llamafactory_repo": "/kaggle/working/LLaMA-Factory",
+    "train_excel": "/kaggle/input/trainsubtask2/TrainSubtask2.xlsx",
+    "train_images_dir": "/kaggle/working/Train/images",
     "test_images_dir": "/kaggle/working/Test/images",
     "output_dir": "/kaggle/working/arabic_flamingo_model",
     "dataset_json": "/kaggle/working/arabic_flamingo_dataset.json"
@@ -121,7 +134,7 @@ per_device_train_batch_size: {per_device_train_batch_size}
 gradient_accumulation_steps: {gradient_accumulation_steps}
 learning_rate: {learning_rate}
 num_train_epochs: {num_train_epochs}
-lr_scheduler_type: {lr_scheduler_type}
+lr_scheduler_type: {lr_scheduler_type}s
 warmup_ratio: {warmup_ratio}
 fp16: {fp16}
 gradient_checkpointing: {gradient_checkpointing}
