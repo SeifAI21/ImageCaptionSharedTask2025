@@ -39,6 +39,8 @@ class BaseFlamingoInference:
         print("✅ Base model loaded and ready for inference!")
         print("📝 Note: This is the base model without fine-tuning")
     
+# Update the generate_caption method in BaseFlamingoInference class:
+
     def generate_caption(self, image_path: str, prompt: str = "وصف هذه الصورة:") -> str:
         """Generate Arabic caption for an image using base model"""
         if not os.path.exists(image_path):
@@ -50,9 +52,7 @@ class BaseFlamingoInference:
                     image_path=image_path,
                     prompt=prompt,
                     max_new_tokens=50,      # Shorter for base model
-                    temperature=0.8,        # Slightly higher temperature
-                    do_sample=True,
-                    top_p=0.9
+                    temperature=0.8         # Remove top_p and do_sample - not supported
                 )
             return caption.strip()
         except Exception as e:
