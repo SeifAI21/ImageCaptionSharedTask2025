@@ -79,10 +79,6 @@ DATASET_CONFIG = {
     "image_token": "<image>",
     "prompt_template": "<image> وصف هذه الصورة:",
     "max_length": 512,
-    "cutoff_len": 512,                  # ADDED: For compatibility
-    "overwrite_cache": True,            # ADDED: For compatibility
-    "preprocessing_num_workers": 1,     # ADDED: For compatibility
-    "dataloader_num_workers": 0,        # ADDED: For compatibility
 }
 
 # Default paths - FIXED for Kaggle
@@ -162,5 +158,5 @@ YAML_DEFAULTS = {
     "val_size": 0.1,
     "per_device_eval_batch_size": 1,
     "eval_strategy": "steps",
-    
+
 }
