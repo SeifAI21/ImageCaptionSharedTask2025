@@ -92,8 +92,11 @@ class ArabicFlamingoModel(nn.Module):
         
         print(f"🔄 Loading AraGPT2 language model: {lang_model_path}")
         
-        # Load AraGPT2 tokenizer and model
-        self.tokenizer = AutoTokenizer.from_pretrained(lang_model_path)
+        # Load AraGPT2 tokenizer and model with trust_remote_code=True
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            lang_model_path,
+            trust_remote_code=True  # FIXED: Added trust_remote_code=True
+        )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         
@@ -101,7 +104,7 @@ class ArabicFlamingoModel(nn.Module):
             lang_model_path,
             torch_dtype=torch.float16,
             device_map="auto",
-            trust_remote_code=True
+            trust_remote_code=True  # FIXED: Added trust_remote_code=True
         )
         
         print(f"🔄 Loading CLIP vision encoder: {vision_encoder_path}")
@@ -263,52 +266,6 @@ class ArabicFlamingoModel(nn.Module):
         
         return caption
 
-# Monkey patch the forward method to include cross-attention
-def patched_forward(self, hidden_states, layer_past=None, attention_mask=None, head_mask=None, use_cache=False, output_attentions=False):
-    """Patched forward method for AraGPT2 blocks with cross-attention"""
-    
-    # Original AraGPT2 block forward
-    residual = hidden_states
-    hidden_states = self.ln_1(hidden_states)
-    attn_outputs = self.attn(
-        hidden_states,
-        layer_past=layer_past,
-        attention_mask=attention_mask,
-        head_mask=head_mask,
-        use_cache=use_cache,
-        output_attentions=output_attentions
-    )
-    attn_output = attn_outputs[0]
-    outputs = attn_outputs[1:]
-    
-    hidden_states = attn_output + residual
-    
-    # Apply cross-attention if available
-    if hasattr(self, 'cross_attn') and hasattr(self.cross_attn, '_media_features'):
-        media_features = getattr(self.cross_attn, '_media_features', None)
-        if media_features is not None:
-            hidden_states = self.cross_attn(hidden_states, media_features)
-    
-    # Feed forward
-    residual = hidden_states
-    hidden_states = self.ln_2(hidden_states)
-    feed_forward_hidden_states = self.mlp(hidden_states)
-    hidden_states = residual + feed_forward_hidden_states
-    
-    if use_cache:
-        outputs = (hidden_states,) + outputs
-    else:
-        outputs = (hidden_states,) + outputs[1:]
-    
-    return outputs
-
-# Apply the patch
-def apply_cross_attention_patch():
-    """Apply cross-attention patch to AraGPT2 blocks"""
-    from transformers.models.gpt2.modeling_gpt2 import GPT2Block
-    GPT2Block.forward = patched_forward
-
-
 def apply_cross_attention_patch():
     """Apply cross-attention patch to AraGPT2 blocks"""
     try:
@@ -374,4 +331,4 @@ def apply_cross_attention_patch():
         
     except ImportError as e:
         print(f"⚠️ Could not patch cross-attention: {e}")
-        print("Proceeding without cross-attention patch")
+        print("Proceeding without cross-attention patch").
