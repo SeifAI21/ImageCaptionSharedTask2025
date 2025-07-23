@@ -1,5 +1,5 @@
 """
-Custom Flamingo Trainer with AraGPT2-Mega - FIXED VERSION
+Custom Flamingo Trainer with AraGPT2-Mega
 """
 import os
 import json
@@ -72,7 +72,7 @@ class ArabicFlamingoTrainer:
     
     def __init__(
         self,
-        base_dir: str = "/kaggle/working",
+        base_dir: str = "/kaggle/working",  # FIXED: Updated default path
         model_name: str = "aubmindlab/aragpt2-mega"
     ):
         self.base_dir = base_dir
@@ -95,16 +95,16 @@ class ArabicFlamingoTrainer:
         
         print("✅ Arabic Flamingo Trainer initialized")
     
-    def setup_lora(self, lora_rank: int = 2, lora_alpha: int = 4, lora_dropout: float = 0.5):  # MUCH MORE CONSERVATIVE
+    def setup_lora(self, lora_rank: int = 8, lora_alpha: int = 16):
         """Setup LoRA for efficient fine-tuning"""
         print("🔧 Setting up LoRA...")
         
-        # VERY conservative LoRA config
+        # LoRA config for AraGPT2 language model
         lora_config = LoraConfig(
-            r=lora_rank,                    # REDUCED: 2 instead of 8
-            lora_alpha=lora_alpha,          # REDUCED: 4 instead of 16
-            target_modules=["c_attn"],      # REDUCED: Only attention, not projection
-            lora_dropout=lora_dropout,      # INCREASED: 0.5 instead of 0.1
+            r=lora_rank,
+            lora_alpha=lora_alpha,
+            target_modules=["c_attn", "c_proj", "c_fc"],  # AraGPT2 modules
+            lora_dropout=0.1,
             bias="none",
             task_type="CAUSAL_LM"
         )
@@ -127,14 +127,12 @@ class ArabicFlamingoTrainer:
     def train(
         self,
         dataset_path: str,
-        num_epochs: int = 1,                # REDUCED: 1 epoch instead of 3
+        num_epochs: int = 3,
         batch_size: int = 1,
-        learning_rate: float = 1e-7,        # REDUCED: Much lower learning rate
-        output_dir: str = None,
-        gradient_accumulation_steps: int = 64,  # INCREASED: Larger effective batch
-        max_steps: int = 1000               # ADDED: Early stopping
+        learning_rate: float = 5e-6,
+        output_dir: str = None
     ):
-        """Train the Arabic Flamingo model with anti-overfitting measures"""
+        """Train the Arabic Flamingo model"""
         
         output_dir = output_dir or os.path.join(self.base_dir, "arabic_flamingo_model")
         os.makedirs(output_dir, exist_ok=True)
@@ -143,10 +141,9 @@ class ArabicFlamingoTrainer:
         print(f"📊 Dataset: {dataset_path}")
         print(f"📊 Output: {output_dir}")
         print(f"📊 Epochs: {num_epochs}, Batch size: {batch_size}, LR: {learning_rate}")
-        print(f"📊 Max steps: {max_steps}, Grad accumulation: {gradient_accumulation_steps}")
         
-        # Setup LoRA with conservative settings
-        self.setup_lora(lora_rank=2, lora_alpha=4, lora_dropout=0.5)
+        # Setup LoRA
+        self.setup_lora()
         
         # Create dataset
         print("📚 Loading dataset...")
@@ -159,27 +156,22 @@ class ArabicFlamingoTrainer:
         optimizer = AdamW(
             trainable_params,
             lr=learning_rate,
-            weight_decay=0.1,               # INCREASED: Higher regularization
-            eps=1e-8
+            weight_decay=0.01
         )
         
-        num_training_steps = min(len(dataloader) * num_epochs, max_steps)
+        num_training_steps = len(dataloader) * num_epochs
         scheduler = get_cosine_schedule_with_warmup(
             optimizer,
-            num_warmup_steps=num_training_steps // 5,  # INCREASED: More warmup
+            num_warmup_steps=num_training_steps // 10,
             num_training_steps=num_training_steps
         )
         
         print(f"🔧 Optimizer: AdamW with {len(trainable_params)} trainable parameter groups")
         print(f"🔧 Scheduler: Cosine with {num_training_steps} total steps")
         
-        # Training loop with early stopping
+        # Training loop
         self.model.train()
         total_loss = 0
-        best_loss = float('inf')
-        patience = 3
-        patience_counter = 0
-        global_step = 0
         
         for epoch in range(num_epochs):
             print(f"\n📅 Epoch {epoch + 1}/{num_epochs}")
@@ -188,10 +180,6 @@ class ArabicFlamingoTrainer:
             progress_bar = tqdm(dataloader, desc=f"Training Epoch {epoch + 1}")
             
             for batch_idx, batch in enumerate(progress_bar):
-                if global_step >= max_steps:
-                    print(f"🛑 Reached max steps ({max_steps}). Stopping training.")
-                    break
-                
                 try:
                     # Move batch to device
                     batch = {k: v.to(self.device) for k, v in batch.items()}
@@ -204,98 +192,68 @@ class ArabicFlamingoTrainer:
                         labels=batch['labels']
                     )
                     
-                    loss = outputs.loss / gradient_accumulation_steps  # Scale for accumulation
+                    loss = outputs.loss
                     
                     # Backward pass
                     loss.backward()
                     
-                    # Update every gradient_accumulation_steps
-                    if (batch_idx + 1) % gradient_accumulation_steps == 0:
-                        # Gradient clipping
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.3)  # STRONGER clipping
-                        
-                        optimizer.step()
-                        scheduler.step()
-                        optimizer.zero_grad()
+                    # Gradient clipping
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    
+                    optimizer.step()
+                    scheduler.step()
+                    optimizer.zero_grad()
                     
                     # Update metrics
-                    actual_loss = loss.item() * gradient_accumulation_steps
-                    epoch_loss += actual_loss
-                    total_loss += actual_loss
-                    global_step += 1
+                    epoch_loss += loss.item()
+                    total_loss += loss.item()
                     
                     # Update progress bar
                     progress_bar.set_postfix({
-                        'loss': f"{actual_loss:.4f}",
+                        'loss': f"{loss.item():.4f}",
                         'avg_loss': f"{epoch_loss / (batch_idx + 1):.4f}",
-                        'lr': f"{scheduler.get_last_lr()[0]:.2e}",
-                        'step': global_step
+                        'lr': f"{scheduler.get_last_lr()[0]:.2e}"
                     })
                     
-                    # Early stopping check every 100 steps
-                    if global_step % 100 == 0:
-                        avg_loss = epoch_loss / (batch_idx + 1)
-                        
-                        # Stop if loss gets too low (overfitting)
-                        if avg_loss < 1.0:
-                            print(f"\n🛑 Loss too low ({avg_loss:.4f}). Stopping to prevent overfitting.")
-                            break
-                        
-                        # Early stopping based on improvement
-                        if avg_loss < best_loss:
-                            best_loss = avg_loss
-                            patience_counter = 0
-                            
-                            # Save best model
-                            best_dir = os.path.join(output_dir, f"best_model_step_{global_step}")
-                            self.save_model(best_dir)
-                            print(f"💾 Best model saved at step {global_step} (loss: {avg_loss:.4f})")
-                        else:
-                            patience_counter += 1
-                        
-                        if patience_counter >= patience:
-                            print(f"\n🛑 Early stopping: no improvement for {patience} checks")
-                            break
-                    
-                    # Save checkpoint every 500 steps (much less frequent)
-                    if global_step % 500 == 0:
-                        checkpoint_dir = os.path.join(output_dir, f"checkpoint_step_{global_step}")
+                    # Save checkpoint every 50 steps
+                    if (batch_idx + 1) % 50 == 0:
+                        checkpoint_dir = os.path.join(output_dir, f"checkpoint-{epoch}-{batch_idx}")
                         self.save_model(checkpoint_dir)
-                        print(f"💾 Checkpoint saved: step {global_step}")
+                        print(f"💾 Checkpoint saved: step {batch_idx + 1}")
                 
                 except Exception as e:
                     print(f"❌ Error in batch {batch_idx}: {e}")
                     continue
             
-            if global_step >= max_steps:
-                break
+            # Save epoch checkpoint
+            epoch_dir = os.path.join(output_dir, f"epoch-{epoch + 1}")
+            self.save_model(epoch_dir)
+            
+            print(f"✅ Epoch {epoch + 1} completed. Average loss: {epoch_loss / len(dataloader):.4f}")
         
         # Save final model
         final_dir = os.path.join(output_dir, "final_model")
         self.save_model(final_dir)
         
-        print(f"🎉 Training completed! Best model saved. Final loss: {best_loss:.4f}")
+        print(f"🎉 Training completed! Model saved to: {final_dir}")
     
     def save_model(self, save_dir: str):
         """Save the trained model"""
-        try:
-            os.makedirs(save_dir, exist_ok=True)
-            
-            # Save the full model state
-            torch.save({
-                'model_state_dict': self.model.state_dict(),
-                'config': {
-                    'model_name': self.model_name,
-                    'base_dir': self.base_dir
-                }
-            }, os.path.join(save_dir, 'arabic_flamingo_model.pt'))
-            
-            # Save tokenizer
-            self.tokenizer.save_pretrained(save_dir)
-            
-            print(f"💾 Model saved to: {save_dir}")
-        except Exception as e:
-            print(f"❌ Error saving model: {e}")
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Save the full model state
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'config': {
+                'model_name': self.model_name,
+                'base_dir': self.base_dir
+            }
+        }, os.path.join(save_dir, 'arabic_flamingo_model.pt'))
+        
+        # Save tokenizer
+        self.tokenizer.save_pretrained(save_dir)
+        
+        print(f"💾 Model saved to: {save_dir}")
     
     def load_model(self, load_dir: str):
         """Load a trained model"""
