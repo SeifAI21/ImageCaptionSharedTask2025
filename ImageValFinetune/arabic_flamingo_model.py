@@ -208,79 +208,79 @@ class ArabicFlamingoModel(nn.Module):
 
 # Add this method to the ArabicFlamingoModel class (after the __init__ method):
 
-def generate_caption(
-    self, 
-    image_path: str, 
-    prompt: str = "وصف هذه الصورة:",
-    max_new_tokens: int = 50,
-    temperature: float = 0.7
-) -> str:
-    """Generate Arabic caption for an image"""
-    
-    try:
-        # Load and preprocess image
-        image = Image.open(image_path).convert('RGB')
+    def generate_caption(
+        self, 
+        image_path: str, 
+        prompt: str = "وصف هذه الصورة:",
+        max_new_tokens: int = 50,
+        temperature: float = 0.7
+    ) -> str:
+        """Generate Arabic caption for an image"""
         
-        # Process image with CLIP
-        inputs = self.image_processor(images=image, return_tensors="pt")
-        pixel_values = inputs['pixel_values'].to(self.device)
-        
-        # Get image features
-        with torch.no_grad():
-            # Encode image
-            image_features = self.vision_encoder(pixel_values).last_hidden_state
+        try:
+            # Load and preprocess image
+            image = Image.open(image_path).convert('RGB')
             
-            # Pass through perceiver resampler
-            batch_size = image_features.shape[0]
-            latents = self.perceiver_resampler.latents.unsqueeze(0).repeat(batch_size, 1, 1)
-            media_features = self.perceiver_resampler(latents, image_features)
+            # Process image with CLIP
+            inputs = self.image_processor(images=image, return_tensors="pt")
+            pixel_values = inputs['pixel_values'].to(self.device)
             
-            # Store media features for cross-attention
-            self._media_features = media_features
-        
-        # Tokenize prompt
-        prompt_tokens = self.tokenizer(
-            prompt,
-            return_tensors="pt",
-            padding=True,
-            truncation=True
-        )
-        
-        input_ids = prompt_tokens["input_ids"].to(self.device)
-        attention_mask = prompt_tokens["attention_mask"].to(self.device)
-        
-        # Generate caption
-        with torch.no_grad():
-            outputs = self.lang_model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                temperature=temperature,
-                pad_token_id=self.tokenizer.eos_token_id,
-                eos_token_id=self.tokenizer.eos_token_id
+            # Get image features
+            with torch.no_grad():
+                # Encode image
+                image_features = self.vision_encoder(pixel_values).last_hidden_state
+                
+                # Pass through perceiver resampler
+                batch_size = image_features.shape[0]
+                latents = self.perceiver_resampler.latents.unsqueeze(0).repeat(batch_size, 1, 1)
+                media_features = self.perceiver_resampler(latents, image_features)
+                
+                # Store media features for cross-attention
+                self._media_features = media_features
+            
+            # Tokenize prompt
+            prompt_tokens = self.tokenizer(
+                prompt,
+                return_tensors="pt",
+                padding=True,
+                truncation=True
             )
-        
-        # Decode generated text
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Extract caption (remove prompt)
-        if prompt in generated_text:
-            caption = generated_text.replace(prompt, "").strip()
-        else:
-            # Fallback: decode only new tokens
-            new_tokens = outputs[0][input_ids.shape[1]:]
-            caption = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        
-        return caption or "لا يمكن وصف الصورة"
-        
-    except Exception as e:
-        return f"خطأ في توليد الوصف: {str(e)}"
+            
+            input_ids = prompt_tokens["input_ids"].to(self.device)
+            attention_mask = prompt_tokens["attention_mask"].to(self.device)
+            
+            # Generate caption
+            with torch.no_grad():
+                outputs = self.lang_model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=True,
+                    temperature=temperature,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id
+                )
+            
+            # Decode generated text
+            generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+            # Extract caption (remove prompt)
+            if prompt in generated_text:
+                caption = generated_text.replace(prompt, "").strip()
+            else:
+                # Fallback: decode only new tokens
+                new_tokens = outputs[0][input_ids.shape[1]:]
+                caption = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+            
+            return caption or "لا يمكن وصف الصورة"
+            
+        except Exception as e:
+            return f"خطأ في توليد الوصف: {str(e)}"
 
-@property
-def device(self):
-    """Get the device of the model"""
-    return next(self.parameters()).device
+    @property
+    def device(self):
+        """Get the device of the model"""
+        return next(self.parameters()).device
 
 def apply_cross_attention_patch():
     """Apply cross-attention patch to AraGPT2 blocks"""
