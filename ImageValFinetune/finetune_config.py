@@ -47,15 +47,20 @@ TRAINING_CONFIG = {
     "logging_steps": 10,
 }
 
-# Conservative settings for limited resources
-CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()
-CONSERVATIVE_CONFIG.update({
+CONSERVATIVE_CONFIG = {
     "lora_rank": 4,
-    "gradient_accumulation_steps": 32,
-    "learning_rate": 2.0e-6,
-    "batch_size": 1,
-})
-
+    "lora_alpha": 8,
+    "lora_dropout": 0.3,
+    "gradient_accumulation_steps": 64,  # INCREASED from 32
+    "learning_rate": 5e-7,
+    "batch_size": 1,                    # KEEP at 1
+    "weight_decay": 0.1,
+    "warmup_ratio": 0.3,
+    
+    # Memory optimization
+    "fp16": True,
+    "gradient_checkpointing": True,     # ADD this
+}
 # Dataset configuration for Custom Flamingo
 DATASET_CONFIG = {
     "name": "arabic_flamingo_dataset",
