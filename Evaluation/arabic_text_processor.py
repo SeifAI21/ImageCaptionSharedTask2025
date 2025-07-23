@@ -72,7 +72,7 @@ class ArabicTextProcessor:
         text = self.patterns["diacritics"].sub('', text)
         
         # Normalize Arabic letters
-        text = self.patterns["alef_patterns"].sub('ا', text)
+        text = self.patterns["alef_pateh_patternstterns"].sub('ا', text)
         text = self.patterns["yeh_patterns"].sub('ي', text)
         text = self.patterns["teh_patterns"].sub('ة', text)
         
