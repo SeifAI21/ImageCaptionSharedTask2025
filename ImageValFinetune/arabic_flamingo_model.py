@@ -331,4 +331,4 @@ def apply_cross_attention_patch():
         
     except ImportError as e:
         print(f"⚠️ Could not patch cross-attention: {e}")
-        print("Proceeding without cross-attention patch").
+        print("Proceeding without cross-attention patch")
