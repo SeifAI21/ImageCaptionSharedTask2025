@@ -5,7 +5,7 @@ Configuration file for Custom Arabic Flamingo with AraGPT2-Mega
 import os
 
 # Model configuration - Custom Flamingo with AraGPT2
-DEFAULT_MODEL_NAME = "aubmindlab/aragpt2-mega"  # Language model
+DEFAULT_MODEL_NAME = "aubmindlab/aragpt2-large"  # Language model
 VISION_MODEL_NAME = "openai/clip-vit-large-patch14"  # Vision encoder
 IMAGE_SIZE = 224
 
@@ -17,7 +17,7 @@ FLAMINGO_CONFIG = {
     "perceiver_num_latents": 64,
     "perceiver_depth": 6,
     "vision_dim": 1024,  # CLIP-Large dimension
-    "lang_dim": 1536,    # AraGPT2-mega dimension
+    "lang_dim": 1024,    # AraGPT2-mega dimension
 }
 
 # Training configuration for Custom Flamingo
