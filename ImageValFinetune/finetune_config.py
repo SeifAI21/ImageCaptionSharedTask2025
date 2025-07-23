@@ -1,95 +1,77 @@
 """
-Configuration file for Arabic Flamingo with AraGPT2
+Configuration file for Custom Arabic Flamingo with AraGPT2-Mega
 """
 
 import os
 
 # Model configuration - Custom Flamingo with AraGPT2
-DEFAULT_MODEL_NAME = "aubmindlab/aragpt2-mega"  # or "aubmindlab/aragpt2-large"
-VISION_MODEL_NAME = "openai/clip-vit-large-patch14"
-IMAGE_MAX_PIXELS = 224 * 224
+DEFAULT_MODEL_NAME = "aubmindlab/aragpt2-mega"  # Language model
+VISION_MODEL_NAME = "openai/clip-vit-large-patch14"  # Vision encoder
+IMAGE_SIZE = 224
 
 # Flamingo-specific configuration
 FLAMINGO_CONFIG = {
-    "vision_encoder": VISION_MODEL_NAME,
-    "language_model": DEFAULT_MODEL_NAME,
+    "vision_encoder_path": VISION_MODEL_NAME,
+    "lang_model_path": DEFAULT_MODEL_NAME,
     "cross_attn_every_n_layers": 4,
     "perceiver_num_latents": 64,
     "perceiver_depth": 6,
     "vision_dim": 1024,  # CLIP-Large dimension
-    "lang_dim": 1024,    # AraGPT2-mega dimension
+    "lang_dim": 1536,    # AraGPT2-mega dimension (corrected from 1024)
 }
 
-# Training configuration for Flamingo+AraGPT2
+# Training configuration for Custom Flamingo
 TRAINING_CONFIG = {
+    # Model settings
+    "model_type": "custom_flamingo",
+    "use_custom_trainer": True,  # Use our custom trainer, not LlamaFactory
+    
     # LoRA settings
     "lora_rank": 8,
     "lora_alpha": 16,
     "lora_dropout": 0.1,
-    "lora_target": "all",
     
-    # Training parameters (adjusted for Arabic GPT)
-    "per_device_train_batch_size": 1,
+    # Training parameters
+    "batch_size": 1,
     "gradient_accumulation_steps": 16,
-    "learning_rate": 5.0e-6,  # Lower for pre-trained Arabic model
-    "num_train_epochs": 10.0,
-    "lr_scheduler_type": "cosine",
+    "learning_rate": 5.0e-6,
+    "num_epochs": 3,
     "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    
+    # Training settings
     "fp16": True,
-    "gradient_checkpointing": True,
-    
-    # Evaluation
-    "val_size": 0.2,
-    "per_device_eval_batch_size": 1,
-    "eval_strategy": "steps",
-    "eval_steps": 15,
-    
-    # Logging and saving
-    "logging_steps": 5,
-    "save_steps": 30,
-    "plot_loss": True,
-    "overwrite_output_dir": True,
-    "save_only_model": False,
-    "report_to": "none",
-    
-    # Data processing (adjusted for Arabic)
-    "cutoff_len": 512,  # Shorter for AraGPT2
-    "overwrite_cache": True,
-    "preprocessing_num_workers": 2,
-    "dataloader_num_workers": 0,
+    "gradient_clipping": 1.0,
+    "save_steps": 50,
+    "eval_steps": 100,
+    "logging_steps": 10,
 }
 
-# Conservative settings
+# Conservative settings for limited resources
 CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()
 CONSERVATIVE_CONFIG.update({
     "lora_rank": 4,
     "gradient_accumulation_steps": 32,
     "learning_rate": 2.0e-6,
-    "per_device_train_batch_size": 1,
+    "batch_size": 1,
 })
 
-# Dataset configuration for Arabic Flamingo
+# Dataset configuration for Custom Flamingo
 DATASET_CONFIG = {
-    "name": "arabic_captions_flamingo_aragpt2",
-    "template": "default",  # Custom template for AraGPT2
-    "conversation_template": {
-        "human_prefix": "",
-        "assistant_prefix": "",
-        "system_message": "",
-        "user_prompt": "<صورة> وصف هذه الصورة:",  # Arabic image token
-        "response_format": "{caption}"
-    }
+    "name": "arabic_flamingo_dataset",
+    "image_token": "<image>",
+    "prompt_template": "<image> وصف هذه الصورة:",
+    "max_length": 512,
 }
 
 # Default paths
 DEFAULT_PATHS = {
-    "base_dir": "/content/drive/MyDrive/ImageVal",
-    "llamafactory_repo": "/content/LLaMA-Factory",
-    "train_excel": "/content/drive/MyDrive/ImageVal/Train/TrainSubtask2.xlsx",
-    "train_images_dir": "/content/drive/MyDrive/ImageVal/Train/images",
-    "test_images_dir": "/content/drive/MyDrive/ImageVal/Test/images",
-    "output_dir": "/content/drive/MyDrive/ImageVal/flamingo_aragpt2_model",
-    "dataset_json": "/content/drive/MyDrive/ImageVal/arabic_captions_flamingo_aragpt2.json"
+    "base_dir": "/kaggle/working",  # Changed for Kaggle
+    "train_excel": "/kaggle/input/your-dataset/TrainSubtask2.xlsx",  # Update this
+    "train_images_dir": "/kaggle/input/your-dataset/images",  # Update this
+    "test_images_dir": "/kaggle/input/your-dataset/test_images",  # Update this
+    "output_dir": "/kaggle/working/arabic_flamingo_model",
+    "dataset_json": "/kaggle/working/arabic_flamingo_dataset.json"
 }
 
 SUPPORTED_IMAGE_FORMATS = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
