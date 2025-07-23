@@ -270,39 +270,83 @@ def register_dataset_in_llamafactory(
         return False
 
 
-def create_training_config(
-    output_path: str,
-    model_name: str = config.DEFAULT_MODEL_NAME,
-    dataset_name: str = config.DATASET_CONFIG["name"],
-    output_dir: str = config.DEFAULT_PATHS["output_dir"],
-    conservative: bool = False
-) -> bool:
-    """Create YAML configuration file for training."""
+# Replace the entire create_training_config method with this:
+
+def create_training_config(self, output_dir=None, conservative=True, custom_config=None):
+    """Create training configuration YAML with ALL required variables"""
+    
+    if output_dir is None:
+        output_dir = os.path.join(self.base_dir, "output")
+    
+    # Select configuration
+    if custom_config:
+        train_config = custom_config
+    elif conservative:
+        train_config = config.CONSERVATIVE_CONFIG.copy()
+    else:
+        train_config = config.TRAINING_CONFIG.copy()
+    
+    # Ensure all required keys exist by merging with base config
+    base_config = config.TRAINING_CONFIG.copy()
+    base_config.update(train_config)
+    train_config = base_config
+    
+    # Prepare ALL required variables for YAML template
+    yaml_vars = {
+        # Model settings
+        "model_name": config.DEFAULT_MODEL_NAME,
+        "template": config.DATASET_CONFIG.get("template", "default"),
+        
+        # LoRA settings
+        "lora_rank": train_config.get("lora_rank", 4),
+        "lora_alpha": train_config.get("lora_alpha", 8),
+        "lora_dropout": train_config.get("lora_dropout", 0.3),
+        "lora_target": train_config.get("lora_target", "c_attn"),
+        
+        # Dataset settings
+        "dataset_name": config.DATASET_CONFIG.get("name", "arabic_flamingo_dataset"),
+        "cutoff_len": config.DATASET_CONFIG.get("cutoff_len", 512),
+        "overwrite_cache": config.DATASET_CONFIG.get("overwrite_cache", True),
+        "preprocessing_num_workers": config.DATASET_CONFIG.get("preprocessing_num_workers", 1),
+        "dataloader_num_workers": config.DATASET_CONFIG.get("dataloader_num_workers", 0),
+        
+        # Output settings
+        "output_dir": output_dir,
+        "logging_steps": train_config.get("logging_steps", 10),
+        "save_steps": train_config.get("save_steps", 500),
+        "plot_loss": config.YAML_DEFAULTS.get("plot_loss", True),
+        "overwrite_output_dir": config.YAML_DEFAULTS.get("overwrite_output_dir", True),
+        "save_only_model": config.YAML_DEFAULTS.get("save_only_model", True),
+        "report_to": config.YAML_DEFAULTS.get("report_to", "none"),
+        
+        # Training settings
+        "per_device_train_batch_size": train_config.get("batch_size", 1),
+        "gradient_accumulation_steps": train_config.get("gradient_accumulation_steps", 32),
+        "learning_rate": train_config.get("learning_rate", 1e-7),
+        "num_train_epochs": train_config.get("num_epochs", 1),
+        "lr_scheduler_type": config.YAML_DEFAULTS.get("lr_scheduler_type", "cosine"),
+        "warmup_ratio": train_config.get("warmup_ratio", 0.1),
+        "fp16": train_config.get("fp16", True),
+        "gradient_checkpointing": train_config.get("gradient_checkpointing", True),
+        
+        # Evaluation settings
+        "val_size": config.YAML_DEFAULTS.get("val_size", 0.1),
+        "per_device_eval_batch_size": config.YAML_DEFAULTS.get("per_device_eval_batch_size", 1),
+        "eval_strategy": config.YAML_DEFAULTS.get("eval_strategy", "steps"),
+        "eval_steps": train_config.get("eval_steps", 100),
+        
+        # Wandb settings
+        "run_name": f"arabic_flamingo_{'conservative' if conservative else 'standard'}"
+    }
+    
     try:
-        # Choose config based on conservative flag
-        train_config = config.CONSERVATIVE_CONFIG if conservative else config.TRAINING_CONFIG
-        
-        # Format the YAML template
-        yaml_content = config.YAML_TEMPLATE.format(
-            model_name=model_name,
-            image_max_pixels=config.IMAGE_MAX_PIXELS,
-            dataset_name=dataset_name,
-            template=config.DATASET_CONFIG["template"],
-            output_dir=output_dir,
-            **train_config
-        )
-        
-        # Save configuration
-        with open(output_path, 'w') as f:
-            f.write(yaml_content)
-        
-        config_type = "Conservative" if conservative else "Standard"
-        print(f"✅ {config_type} training configuration saved to: {output_path}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error creating training config: {e}")
-        return False
+        # Format the YAML template with all variables
+        yaml_content = config.YAML_TEMPLATE.format(**yaml_vars)
+        return yaml_content
+    except KeyError as e:
+        print(f"❌ Missing YAML variable: {e}")
+        print("Available variables:", list(yaml_vars.keys()))
+        raise
 
 
 def get_available_checkpoints(model_dir: str) -> List[str]:
