@@ -211,7 +211,7 @@ class ArabicFlamingoModel(nn.Module):
         image_path: str, 
         prompt: str = "وصف هذه الصورة:",
         max_new_tokens: int = 50,
-        temperature: float = 0.7
+        temperature: float = 0.1
     ) -> str:
         """Generate Arabic caption for an image"""
         
