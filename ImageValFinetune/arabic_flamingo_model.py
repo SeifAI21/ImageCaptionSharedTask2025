@@ -204,9 +204,7 @@ class ArabicFlamingoModel(nn.Module):
         )
         
         return outputs
-# Add this method to the ArabicFlamingoModel class (around line 200):
-
-# Add this method to the ArabicFlamingoModel class (after the __init__ method):
+# Replace the generate_caption method with this corrected version:
 
     def generate_caption(
         self, 
@@ -227,13 +225,15 @@ class ArabicFlamingoModel(nn.Module):
             
             # Get image features
             with torch.no_grad():
-                # Encode image
-                image_features = self.vision_encoder(pixel_values).last_hidden_state
+                # Encode image with CLIP
+                vision_outputs = self.vision_encoder(pixel_values=pixel_values)
+                image_features = vision_outputs.last_hidden_state  # [batch, 257, 1024]
                 
-                # Pass through perceiver resampler
-                batch_size = image_features.shape[0]
-                latents = self.perceiver_resampler.latents.unsqueeze(0).repeat(batch_size, 1, 1)
-                media_features = self.perceiver_resampler(latents, image_features)
+                # Project to language dimension
+                image_features = self.vision_projection(image_features)  # [batch, 257, lang_dim]
+                
+                # FIXED: Use self.perceiver instead of self.perceiver_resampler
+                media_features = self.perceiver(image_features)  # [batch, 64, lang_dim]
                 
                 # Store media features for cross-attention
                 self._media_features = media_features
