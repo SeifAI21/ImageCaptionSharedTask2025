@@ -30,6 +30,7 @@ TRAINING_CONFIG = {
     "lora_rank": 8,
     "lora_alpha": 16,
     "lora_dropout": 0.1,
+    "lora_target": "c_attn,c_proj,c_fc",  # ADDED: Missing lora_target
     
     # Training parameters
     "batch_size": 1,
@@ -48,14 +49,16 @@ TRAINING_CONFIG = {
 }
 
 # Conservative settings - FIXED for anti-overfitting
-CONSERVATIVE_CONFIG = {
+CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()  # Start with base config
+CONSERVATIVE_CONFIG.update({
     "lora_rank": 4,
     "lora_alpha": 8,
     "lora_dropout": 0.3,
-    "gradient_accumulation_steps": 64,  # INCREASED from 32
-    "learning_rate": 5e-7,              # Much lower to prevent overfitting
-    "batch_size": 1,                    # KEEP at 1
-    "weight_decay": 0.1,                # Higher regularization
+    "lora_target": "c_attn,c_proj",        # ADDED: Fewer targets for conservative
+    "gradient_accumulation_steps": 64,     # INCREASED from 32
+    "learning_rate": 5e-7,                 # Much lower to prevent overfitting
+    "batch_size": 1,                       # KEEP at 1
+    "weight_decay": 0.1,                   # Higher regularization
     "warmup_ratio": 0.3,
     
     # Memory optimization
@@ -63,11 +66,11 @@ CONSERVATIVE_CONFIG = {
     "gradient_checkpointing": True,
     
     # Anti-overfitting settings
-    "save_steps": 500,                  # Less frequent saves
+    "save_steps": 500,                     # Less frequent saves
     "eval_steps": 100,
     "logging_steps": 10,
-    "gradient_clipping": 0.5,           # Stronger clipping
-}
+    "gradient_clipping": 0.5,              # Stronger clipping
+})
 
 # Dataset configuration for Custom Flamingo - FIXED
 DATASET_CONFIG = {
@@ -98,7 +101,7 @@ SUPPORTED_IMAGE_FORMATS = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
 # IMAGE_MAX_PIXELS for compatibility
 IMAGE_MAX_PIXELS = 224 * 224
 
-# YAML template (kept for compatibility)
+# YAML template - FIXED with proper placeholders
 YAML_TEMPLATE = """### model
 model_name_or_path: {model_name}
 template: {template}
@@ -134,7 +137,7 @@ per_device_train_batch_size: {per_device_train_batch_size}
 gradient_accumulation_steps: {gradient_accumulation_steps}
 learning_rate: {learning_rate}
 num_train_epochs: {num_train_epochs}
-lr_scheduler_type: {lr_scheduler_type}s
+lr_scheduler_type: {lr_scheduler_type}
 warmup_ratio: {warmup_ratio}
 fp16: {fp16}
 gradient_checkpointing: {gradient_checkpointing}
@@ -148,3 +151,15 @@ eval_steps: {eval_steps}
 ### wandb
 run_name: {run_name}
 """
+
+# Additional YAML template variables that might be needed
+YAML_DEFAULTS = {
+    "plot_loss": True,
+    "overwrite_output_dir": True,
+    "save_only_model": True,
+    "report_to": "none",
+    "lr_scheduler_type": "cosine",
+    "val_size": 0.1,
+    "per_device_eval_batch_size": 1,
+    "eval_strategy": "steps",
+}
