@@ -1,14 +1,26 @@
 """
-Configuration file for Arabic Image Captioning Fine-tuning
+Configuration file for Arabic Flamingo with AraGPT2
 """
 
 import os
 
-# Model configuration
-DEFAULT_MODEL_NAME = "Qwen/Qwen2.5-VL-3B-Instruct"
-IMAGE_MAX_PIXELS = 131072
+# Model configuration - Custom Flamingo with AraGPT2
+DEFAULT_MODEL_NAME = "aubmindlab/aragpt2-mega"  # or "aubmindlab/aragpt2-large"
+VISION_MODEL_NAME = "openai/clip-vit-large-patch14"
+IMAGE_MAX_PIXELS = 224 * 224
 
-# Training configuration
+# Flamingo-specific configuration
+FLAMINGO_CONFIG = {
+    "vision_encoder": VISION_MODEL_NAME,
+    "language_model": DEFAULT_MODEL_NAME,
+    "cross_attn_every_n_layers": 4,
+    "perceiver_num_latents": 64,
+    "perceiver_depth": 6,
+    "vision_dim": 1024,  # CLIP-Large dimension
+    "lang_dim": 1024,    # AraGPT2-mega dimension
+}
+
+# Training configuration for Flamingo+AraGPT2
 TRAINING_CONFIG = {
     # LoRA settings
     "lora_rank": 8,
@@ -16,89 +28,77 @@ TRAINING_CONFIG = {
     "lora_dropout": 0.1,
     "lora_target": "all",
     
-    # Training parameters
+    # Training parameters (adjusted for Arabic GPT)
     "per_device_train_batch_size": 1,
     "gradient_accumulation_steps": 16,
-    "learning_rate": 2.0e-5,
-    "num_train_epochs": 15.0,
+    "learning_rate": 5.0e-6,  # Lower for pre-trained Arabic model
+    "num_train_epochs": 10.0,
     "lr_scheduler_type": "cosine",
     "warmup_ratio": 0.1,
-    "fp16": False,
+    "fp16": True,
     "gradient_checkpointing": True,
     
     # Evaluation
     "val_size": 0.2,
     "per_device_eval_batch_size": 1,
     "eval_strategy": "steps",
-    "eval_steps": 10,
+    "eval_steps": 15,
     
     # Logging and saving
     "logging_steps": 5,
-    "save_steps": 25,
+    "save_steps": 30,
     "plot_loss": True,
     "overwrite_output_dir": True,
     "save_only_model": False,
     "report_to": "none",
     
-    # Data processing
-    "cutoff_len": 1024,
+    # Data processing (adjusted for Arabic)
+    "cutoff_len": 512,  # Shorter for AraGPT2
     "overwrite_cache": True,
     "preprocessing_num_workers": 2,
     "dataloader_num_workers": 0,
 }
 
-# Conservative settings for limited VRAM
+# Conservative settings
 CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()
 CONSERVATIVE_CONFIG.update({
     "lora_rank": 4,
     "gradient_accumulation_steps": 32,
+    "learning_rate": 2.0e-6,
     "per_device_train_batch_size": 1,
-    "preprocessing_num_workers": 1,
-    "dataloader_num_workers": 0,
 })
 
-# Paths (adjust these according to your setup)
-DEFAULT_PATHS = {
-    "base_dir": "/content/drive/MyDrive/ImageVal",
-    "train_dir": "/content/drive/MyDrive/ImageVal/Train",
-    "test_dir": "/content/drive/MyDrive/ImageVal/Test", 
-    "images_dir": "/content/drive/MyDrive/ImageVal/Train/images",
-    "test_images_dir": "/content/drive/MyDrive/ImageVal/Test/images",
-    "excel_file": "/content/drive/MyDrive/ImageVal/Train/TrainSubtask2.xlsx",
-    "output_dir": "/content/drive/MyDrive/ImageVal/qwen2_5vl_arabic_model",
-    "llamafactory_repo": "/content/LLaMA-Factory",
-}
-
-# Dataset configuration
+# Dataset configuration for Arabic Flamingo
 DATASET_CONFIG = {
-    "name": "arabic_captions",
-    "template": "qwen2_vl",
+    "name": "arabic_captions_flamingo_aragpt2",
+    "template": "default",  # Custom template for AraGPT2
     "conversation_template": {
-        "human_prefix": "human",
-        "gpt_prefix": "gpt",
-        "system_message": "You are an expert in visual scene understanding and multilingual caption generation.",
-        "user_prompt": "<image>Describe this image in Arabic.",
+        "human_prefix": "",
+        "assistant_prefix": "",
+        "system_message": "",
+        "user_prompt": "<صورة> وصف هذه الصورة:",  # Arabic image token
+        "response_format": "{caption}"
     }
 }
 
-# Supported image formats
-SUPPORTED_IMAGE_FORMATS = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp']
-
-# Generation settings for inference
-GENERATION_CONFIG = {
-    "max_new_tokens": 128,
-    "do_sample": True,
-    "temperature": 0.7,
-    "top_p": 0.9,
-    "repetition_penalty": 1.1,
+# Default paths
+DEFAULT_PATHS = {
+    "base_dir": "/content/drive/MyDrive/ImageVal",
+    "llamafactory_repo": "/content/LLaMA-Factory",
+    "train_excel": "/content/drive/MyDrive/ImageVal/Train/TrainSubtask2.xlsx",
+    "train_images_dir": "/content/drive/MyDrive/ImageVal/Train/images",
+    "test_images_dir": "/content/drive/MyDrive/ImageVal/Test/images",
+    "output_dir": "/content/drive/MyDrive/ImageVal/flamingo_aragpt2_model",
+    "dataset_json": "/content/drive/MyDrive/ImageVal/arabic_captions_flamingo_aragpt2.json"
 }
 
-# YAML template for LlamaFactory
+SUPPORTED_IMAGE_FORMATS = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+
+# YAML template for LlamaFactory - UPDATED FOR FLAMINGO
 YAML_TEMPLATE = """### model
 model_name_or_path: {model_name}
-image_max_pixels: {image_max_pixels}
+template: {template}
 trust_remote_code: true
-
 
 ### method
 stage: sft
@@ -111,7 +111,6 @@ lora_target: {lora_target}
 
 ### dataset
 dataset: {dataset_name}
-template: {template}
 cutoff_len: {cutoff_len}
 overwrite_cache: {overwrite_cache}
 preprocessing_num_workers: {preprocessing_num_workers}
@@ -141,4 +140,7 @@ val_size: {val_size}
 per_device_eval_batch_size: {per_device_eval_batch_size}
 eval_strategy: {eval_strategy}
 eval_steps: {eval_steps}
+
+### wandb
+run_name: {run_name}
 """

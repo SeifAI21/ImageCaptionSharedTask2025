@@ -81,7 +81,11 @@ def install_llamafactory(repo_path: str = "/content/LLaMA-Factory"):
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to install LlamaFactory: {e}")
         return False
-
+    
+def get_timestamp() -> str:
+    """Get current timestamp string."""
+    import datetime
+    return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 def create_directory_structure(base_dir: str):
     """Create necessary directories for training."""
@@ -339,3 +343,57 @@ def print_training_summary(config_path: str):
                     print(f"  {line.strip()}")
     else:
         print(f"Config file not found: {config_path}")
+
+def create_training_dataset_flamingo(
+    excel_path: str, 
+    images_dir: str, 
+    output_path: str,
+    use_absolute_paths: bool = True
+) -> bool:
+    """Create training dataset in Flamingo format."""
+    print("=== Creating Flamingo Training Dataset ===")
+    
+    try:
+        df = pd.read_excel(excel_path)
+        found_images, missing_images = validate_images(images_dir, df['File Name'].dropna().tolist())
+        
+        training_data = []
+        
+        for _, row in df.iterrows():
+            if pd.notna(row['File Name']) and pd.notna(row['Description']):
+                filename = row['File Name']
+                matching_images = [img for img in found_images if img.startswith(filename)]
+                
+                if not matching_images:
+                    continue
+                
+                image_file = matching_images[0]
+                image_path = os.path.join(images_dir, image_file) if use_absolute_paths else f"images/{image_file}"
+                
+                # Flamingo format
+                entry = {
+                    "conversations": [
+                        {
+                            "from": "human",
+                            "value": f"<image>وصف هذه الصورة باللغة العربية."
+                        },
+                        {
+                            "from": "gpt", 
+                            "value": str(row['Description'])
+                        }
+                    ],
+                    "images": [image_path]
+                }
+                training_data.append(entry)
+        
+        # Save training data
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(training_data, f, ensure_ascii=False, indent=2)
+        
+        print(f"✅ Created {len(training_data)} Flamingo training examples")
+        return len(training_data) > 0
+        
+    except Exception as e:
+        print(f"❌ Error creating Flamingo dataset: {e}")
+        return False
