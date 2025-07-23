@@ -204,77 +204,86 @@ class ArabicFlamingoModel(nn.Module):
         )
         
         return outputs
-    
-# Replace the generate_caption method (around line 200) with this:
+# Add this method to the ArabicFlamingoModel class (around line 200):
 
 def generate_caption(
     self, 
     image_path: str, 
     prompt: str = "وصف هذه الصورة:",
     max_new_tokens: int = 100,
-    temperature: float = 0.7,
-    do_sample: bool = True
+    temperature: float = 0.7
 ) -> str:
     """Generate Arabic caption for an image"""
     
-    # Load and preprocess image
-    if isinstance(image_path, str):
-        image = Image.open(image_path).convert('RGB')
-    else:
-        image = image_path
-    
-    # FIXED: Process image correctly
-    inputs = self.image_processor(images=image, return_tensors="pt")
-    
-    # FIXED: Handle the dict properly
-    if isinstance(inputs, dict) and 'pixel_values' in inputs:
-        pixel_values = inputs['pixel_values']
-    else:
-        raise ValueError(f"Expected dict with 'pixel_values', got: {type(inputs)}")
-    
-    if torch.cuda.is_available():
-        pixel_values = pixel_values.cuda()
-    
-    # FIXED: Encode image with correct tensor
-    inputs = self.image_processor(images=image, return_tensors="pt")
-    pixel_values = inputs['pixel_values']  # Handle as dict
-    media_features = self.encode_images(pixel_values)
-    
-    # Prepare text prompt
-    full_prompt = f"<image> {prompt}"
-    prompt_tokens = self.tokenizer(
-        full_prompt,
-        return_tensors="pt",
-        padding=True,
-        truncation=True
-    )
-    
-    if torch.cuda.is_available():
-        prompt_tokens = {k: v.cuda() for k, v in prompt_tokens.items()}
-    
-    # Generate caption
-    with torch.no_grad():
-        outputs = self.lang_model.generate(
-            input_ids=prompt_tokens["input_ids"],
-            attention_mask=prompt_tokens["attention_mask"],
-            max_new_tokens=max_new_tokens,
-            do_sample=do_sample,
-            temperature=temperature,
-            top_p=0.9,
-            pad_token_id=self.tokenizer.eos_token_id,
-            eos_token_id=self.tokenizer.eos_token_id
+    try:
+        # Load and preprocess image
+        if isinstance(image_path, str):
+            image = Image.open(image_path).convert('RGB')
+        else:
+            image = image_path
+        
+        # Process image
+        inputs = self.image_processor(images=image, return_tensors="pt")
+        
+        # Handle the dict properly
+        if isinstance(inputs, dict) and 'pixel_values' in inputs:
+            pixel_values = inputs['pixel_values']
+        else:
+            raise ValueError(f"Expected dict with 'pixel_values', got: {type(inputs)}")
+        
+        # Move to device
+        pixel_values = pixel_values.to(self.device)
+        
+        # Encode image
+        with torch.no_grad():
+            image_features = self.vision_encoder(pixel_values).last_hidden_state
+            
+            # Pass through perceiver resampler
+            batch_size = image_features.shape[0]
+            latents = self.perceiver_resampler.latents.unsqueeze(0).repeat(batch_size, 1, 1)
+            media_features = self.perceiver_resampler(latents, image_features)
+            
+            # Store for cross-attention
+            self._media_features = media_features
+        
+        # Prepare text prompt
+        full_prompt = f"<image> {prompt}"
+        prompt_tokens = self.tokenizer(
+            full_prompt,
+            return_tensors="pt",
+            padding=True,
+            truncation=True
         )
-    
-    # Decode generated text
-    generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-    
-    # Extract only the generated part
-    if prompt in generated_text:
-        caption = generated_text.split(prompt)[-1].strip()
-    else:
-        caption = generated_text.strip()
-    
-    return caption
+        
+        # Move to device
+        input_ids = prompt_tokens["input_ids"].to(self.device)
+        attention_mask = prompt_tokens["attention_mask"].to(self.device)
+        
+        # Generate caption
+        with torch.no_grad():
+            outputs = self.lang_model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=max_new_tokens,
+                do_sample=True if temperature > 0 else False,
+                temperature=temperature if temperature > 0 else 1.0,
+                pad_token_id=self.tokenizer.eos_token_id,
+                eos_token_id=self.tokenizer.eos_token_id
+            )
+        
+        # Decode generated text
+        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+        # Extract only the generated part (remove prompt)
+        if prompt in generated_text:
+            caption = generated_text.split(prompt)[-1].strip()
+        else:
+            caption = generated_text.strip()
+        
+        return caption
+        
+    except Exception as e:
+        return f"Error in caption generation: {e}"
 
 def apply_cross_attention_patch():
     """Apply cross-attention patch to AraGPT2 blocks"""
