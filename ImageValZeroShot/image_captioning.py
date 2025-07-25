@@ -36,7 +36,7 @@ class ArabicImageCaptioner:
         
         loading_path = self.checkpoint_path if self.checkpoint_path else self.model_name
 
-        self.model = AutoModelForImageTextToText.from_pretrained(  # Updated class
+        self.model = AutoModelForImageTextToText.from_pretrained(
             loading_path,
             torch_dtype=torch.float16,
             device_map="auto",
@@ -47,8 +47,13 @@ class ArabicImageCaptioner:
             self.model_name,
             trust_remote_code=True
         )
-        print("Model and processor loaded successfully!")
         
+        # Debug: Check for image tokens
+        print("Special tokens in tokenizer:")
+        print(f"Image token: {getattr(self.processor.tokenizer, 'image_token', 'Not found')}")
+        print(f"Special tokens: {self.processor.tokenizer.special_tokens_map}")
+        
+        print("Model and processor loaded successfully!")
 
     def generate_caption(self, image_path, max_new_tokens=128):
         """
