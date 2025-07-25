@@ -10,7 +10,7 @@ import argparse
 import torch
 from PIL import Image
 from tqdm import tqdm
-from transformers import AutoModelForVision2Seq, AutoProcessor
+from transformers import AutoModelForImageTextToText, AutoProcessor  # Updated import
 
 
 class ArabicImageCaptioner:
@@ -36,16 +36,16 @@ class ArabicImageCaptioner:
         
         loading_path = self.checkpoint_path if self.checkpoint_path else self.model_name
 
-        self.model = AutoModelForVision2Seq.from_pretrained(
+        self.model = AutoModelForImageTextToText.from_pretrained(  # Updated class
             loading_path,
-            torch_dtype=torch.float16,  # Changed from bfloat16
+            torch_dtype=torch.float16,
             device_map="auto",
-            trust_remote_code=True  # Added for Gemma
+            trust_remote_code=True
         )
                 
         self.processor = AutoProcessor.from_pretrained(
             self.model_name,
-            trust_remote_code=True  # Added for Gemma
+            trust_remote_code=True
         )
         print("Model and processor loaded successfully!")
         
