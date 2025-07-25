@@ -34,12 +34,14 @@ class ArabicImageCaptioner:
         )
         print("Model and processor loaded successfully!\n")
 
+
     def generate_caption(self, image_path, max_new_tokens=128):
+        """Generate Arabic caption for a single image."""
         try:
             image = Image.open(image_path).convert("RGB")
 
             # Check Gemma's special image token
-            img_token = getattr(self.processor.tokenizer, "image_token", "<image>")
+            img_token = getattr(self.processor.tokenizer, "image_token", "<image_soft_token>")
             prompt = (
                 f"{img_token} "
                 "أنت خبير في فهم المشاهد البصرية وإنشاء التعليقات متعددة اللغات. "
@@ -52,7 +54,8 @@ class ArabicImageCaptioner:
                 text=prompt,
                 images=image,
                 return_tensors="pt"
-            ).to(self.model.device)
+            )
+            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
 
             with torch.no_grad():
                 generated_ids = self.model.generate(
@@ -61,17 +64,26 @@ class ArabicImageCaptioner:
                     do_sample=True,
                     temperature=0.7,
                     top_p=0.9,
-                    repetition_penalty=1.1
+                    repetition_penalty=1.1,
+                    use_cache=False,  # Disable cache to avoid sliding_window error
+                    pad_token_id=self.processor.tokenizer.eos_token_id  # Add padding token
                 )
 
             caption = self.processor.decode(
                 generated_ids[0],
                 skip_special_tokens=True
-            ).strip()
+            )
+            
+            # Clean the caption by removing the prompt
+            caption = caption.replace(prompt, "").strip()
+            
             return caption
+            
         except Exception as e:
             print(f"Error processing {image_path}: {e}")
             return ""
+
+
 
     def process_folder(self, image_folder, output_csv, supported_formats=('.png', '.jpg', '.jpeg')):
         if not os.path.isdir(image_folder):
