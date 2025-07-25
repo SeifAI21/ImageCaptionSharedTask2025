@@ -49,6 +49,7 @@ class ArabicImageCaptioner:
         )
         print("Model and processor loaded successfully!")
         
+
     def generate_caption(self, image_path, max_new_tokens=128):
         """
         Generate Arabic caption for a single image.
@@ -63,9 +64,9 @@ class ArabicImageCaptioner:
         try:
             image = Image.open(image_path).convert("RGB")
             
-            # Simplified prompt for Gemma (no chat template)
+            # Updated prompt with image token for Gemma
             prompt = (
-                "You are an expert in visual scene understanding and multilingual caption generation. "
+                "<image>You are an expert in visual scene understanding and multilingual caption generation. "
                 "Analyze the content of this image, which is potentially related to the Palestinian Nakba "
                 "and Israeli occupation of Palestine, and provide a concise and meaningful caption in Arabic - about 15 to 50 words. "
                 "The caption should reflect the scene's content, emotional context, and should be natural and culturally appropriate. "
@@ -104,8 +105,8 @@ class ArabicImageCaptioner:
         except Exception as e:
             print(f"Error processing {image_path}: {e}")
             return ""
-    
-    # ... rest of the methods remain the same ...
+
+
     def process_folder(self, image_folder, output_csv, supported_formats=('.png', '.jpg', '.jpeg')):
         """
         Process all images in a folder and save captions to CSV.
