@@ -18,70 +18,120 @@ class ArabicImageCaptioner:
         self.model = None
         self.processor = None
 
+
     def load_model(self):
+        """Load the model and processor."""
         print(f"Loading model: {self.model_name} on {self.device}")
         path = self.checkpoint_path or self.model_name
+
+        # Add HF token support like the working example
+        kwargs = {}
+        # You can add HF_TOKEN here if needed
+        # kwargs["token"] = "your_hf_token"
 
         self.model = AutoModelForImageTextToText.from_pretrained(
             path,
             torch_dtype=torch.float16,
             device_map="auto",
-            trust_remote_code=True
+            trust_remote_code=True,
+            **kwargs
         )
         self.processor = AutoProcessor.from_pretrained(
             path,
-            trust_remote_code=True
+            trust_remote_code=True,
+            **kwargs
         )
         print("Model and processor loaded successfully!\n")
 
+    def preprocess_image(self, image: Image.Image) -> Image.Image:
+        """Preprocess image to meet Gemma3n requirements (512x512)"""
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
+        target_size = (512, 512)
+        original_width, original_height = image.size
+        aspect_ratio = original_width / original_height
+
+        if aspect_ratio > 1:
+            new_width = target_size[0]
+            new_height = int(target_size[0] / aspect_ratio)
+        else:
+            new_height = target_size[1]
+            new_width = int(target_size[1] * aspect_ratio)
+
+        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        processed_image = Image.new("RGB", target_size, (255, 255, 255))
+
+        x_offset = (target_size[0] - new_width) // 2
+        y_offset = (target_size[1] - new_height) // 2
+        processed_image.paste(image, (x_offset, y_offset))
+
+        return processed_image
 
     def generate_caption(self, image_path, max_new_tokens=128):
-        """Generate Arabic caption for a single image."""
+        """Generate Arabic caption for a single image using chat template."""
         try:
             image = Image.open(image_path).convert("RGB")
+            
+            # Preprocess image to meet Gemma3n requirements
+            processed_image = self.preprocess_image(image)
 
-            # Check Gemma's special image token
-            img_token = getattr(self.processor.tokenizer, "image_token", "<image_soft_token>")
-            prompt = (
-                f"{img_token} "
-                "أنت خبير في فهم المشاهد البصرية وإنشاء التعليقات متعددة اللغات. "
-                "حلل محتوى هذه الصورة المتعلقة بالنكبة الفلسطينية أو الاحتلال الإسرائيلي، "
-                "وقدم تسمية موجزة وذات معنى باللغة العربية (15–50 كلمة)، "
-                "تعكس محتوى المشهد والسياق العاطفي، وبصياغة طبيعية مناسبة ثقافيًا."
-            )
+            # Use chat template format like the working example
+            messages = [
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "أنت خبير في فهم المشاهد البصرية وإنشاء التعليقات متعددة اللغات. تخصصك هو تحليل الصور التاريخية المتعلقة بالنكبة الفلسطينية والاحتلال الإسرائيلي."
+                        }
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": processed_image},
+                        {
+                            "type": "text",
+                            "text": "حلل محتوى هذه الصورة وقدم تسمية موجزة وذات معنى باللغة العربية (15–50 كلمة) تعكس محتوى المشهد والسياق العاطفي، وبصياغة طبيعية مناسبة ثقافيًا. التعليق يجب أن يكون باللغة العربية فقط."
+                        }
+                    ]
+                }
+            ]
 
-            inputs = self.processor(
-                text=prompt,
-                images=image,
-                return_tensors="pt"
-            )
-            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+            # Apply chat template and tokenize
+            inputs = self.processor.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+            ).to(self.model.device, dtype=self.model.dtype)
+            
+            input_len = inputs["input_ids"].shape[-1]
 
             with torch.no_grad():
-                generated_ids = self.model.generate(
+                outputs = self.model.generate(
                     **inputs,
                     max_new_tokens=max_new_tokens,
+                    disable_compile=True,
                     do_sample=True,
                     temperature=0.7,
                     top_p=0.9,
-                    repetition_penalty=1.1,
-                    use_cache=False,  # Disable cache to avoid sliding_window error
-                    pad_token_id=self.processor.tokenizer.eos_token_id  # Add padding token
                 )
 
-            caption = self.processor.decode(
-                generated_ids[0],
-                skip_special_tokens=True
-            )
-            
-            # Clean the caption by removing the prompt
-            caption = caption.replace(prompt, "").strip()
-            
-            return caption
-            
+            # Decode only the generated part
+            response = self.processor.batch_decode(
+                outputs[:, input_len:],
+                skip_special_tokens=True,
+            )[0].strip()
+
+            return response
+
         except Exception as e:
             print(f"Error processing {image_path}: {e}")
             return ""
+
 
 
 
