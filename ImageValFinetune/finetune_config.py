@@ -5,16 +5,16 @@ Configuration file for Arabic Image Captioning Fine-tuning
 import os
 
 # Model configuration
-DEFAULT_MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
+DEFAULT_MODEL_NAME = "google/gemma-3n-E4B-it"
 IMAGE_MAX_PIXELS = 131072
 
 # Training configuration
 TRAINING_CONFIG = {
     # LoRA settings
     "lora_rank": 8,
-    "lora_alpha": 16,
-    "lora_dropout": 0.1,
-    "lora_target": "all",
+    "lora_alpha": 8,
+    "lora_dropout": 0,
+    "lora_target": "q_proj,v_proj,k_proj,o_proj,gate_proj,up_proj,down_proj",  # Gemma-specific layers
     
     # Training parameters
     "per_device_train_batch_size": 1,
@@ -51,31 +51,23 @@ TRAINING_CONFIG = {
 CONSERVATIVE_CONFIG = TRAINING_CONFIG.copy()
 CONSERVATIVE_CONFIG.update({
     "lora_rank": 2,
+    "lora_alpha": 2,  
+
     "gradient_accumulation_steps": 128,
     "per_device_train_batch_size": 1,
     "preprocessing_num_workers": 1,
     "dataloader_num_workers": 0,
 })
 
-# Paths (adjust these according to your setup)
-DEFAULT_PATHS = {
-    "base_dir": "/content/drive/MyDrive/ImageVal",
-    "train_dir": "/content/drive/MyDrive/ImageVal/Train",
-    "test_dir": "/content/drive/MyDrive/ImageVal/Test", 
-    "images_dir": "/content/drive/MyDrive/ImageVal/Train/images",
-    "test_images_dir": "/content/drive/MyDrive/ImageVal/Test/images",
-    "excel_file": "/content/drive/MyDrive/ImageVal/Train/TrainSubtask2.xlsx",
-    "output_dir": "/content/drive/MyDrive/ImageVal/qwen2_5vl_arabic_model",
-    "llamafactory_repo": "/content/LLaMA-Factory",
-}
+
 
 # Dataset configuration
 DATASET_CONFIG = {
     "name": "arabic_captions",
-    "template": "qwen2_vl",
+    "template": "gemma",  # Change from "default" to "gemma" for Gemma-based models
     "conversation_template": {
-        "human_prefix": "human",
-        "gpt_prefix": "gpt",
+        "human_prefix": "user",  # Gemma uses "user" instead of "human"
+        "gpt_prefix": "model",   # Gemma uses "model" instead of "gpt"
         "system_message": "You are an expert in visual scene understanding and multilingual caption generation.",
         "user_prompt": "<image>Describe this image in Arabic.",
     }
@@ -93,6 +85,16 @@ GENERATION_CONFIG = {
     "repetition_penalty": 1.1,
 }
 
+DEFAULT_PATHS = {
+    "base_dir": "/kaggle/working",
+    "llamafactory_repo": "/kaggle/working/LLaMA-Factory",
+    "train_excel": "/kaggle/input/trainsubtask2/TrainSubtask2.xlsx",
+    "train_images_dir": "/kaggle/working/Train/images",
+    "test_images_dir": "/kaggle/working/Test/images",
+    "output_dir": "/kaggle/working/arabic_flamingo_model",
+    "dataset_json": "/kaggle/working/arabic_flamingo_dataset.json",
+    "config_yaml": "/kaggle/working/gemma_arabic_config.yaml"  # Add this
+}
 # YAML template for LlamaFactory
 YAML_TEMPLATE = """### model
 model_name_or_path: {model_name}

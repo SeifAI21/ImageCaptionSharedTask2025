@@ -8,7 +8,7 @@ import json
 import pandas as pd
 from typing import Optional, List, Dict
 import torch
-from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+from transformers import AutoProcessor,AutoModelForVision2Seq
 from PIL import Image
 from tqdm import tqdm
 
@@ -304,12 +304,16 @@ class ArabicImageCaptionTrainer:
         # Load model and processor
         try:
             print("Loading fine-tuned model...")
-            model = Qwen2VLForConditionalGeneration.from_pretrained(
+            model = AutoModelForVision2Seq.from_pretrained(
                 checkpoint_path,
                 torch_dtype=torch.bfloat16,
-                device_map="auto"
+                device_map="auto",
+                trust_remote_code=True  # Important for PALO
             )
-            processor = AutoProcessor.from_pretrained(config.DEFAULT_MODEL_NAME)
+            processor = AutoProcessor.from_pretrained(
+                config.DEFAULT_MODEL_NAME,
+                trust_remote_code=True
+            )
             print("✅ Model loaded successfully")
             
         except Exception as e:
@@ -359,54 +363,43 @@ class ArabicImageCaptionTrainer:
         
         return results
     
-    def _process_single_image(
-        self,
-        image_path: str,
-        image_file: str,
-        model,
-        processor
-    ) -> Dict:
+    def _process_single_image(self, image_path: str, image_file: str, model, processor) -> Dict:
         """Process a single image and generate caption."""
         image = Image.open(image_path)
         
-        # Create prompt
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image},
-                    {"type": "text", "text": "Describe this image in Arabic."}
-                ]
-            }
-        ]
+        # PALO likely needs a different format - check PALO's documentation
+        # This Qwen-specific code won't work:
+        # messages = [
+        #     {
+        #         "role": "user", 
+        #         "content": [
+        #             {"type": "image", "image": image},
+        #             {"type": "text", "text": "Describe this image in Arabic."}
+        #         ]
+        #     }
+        # ]
         
-        # Process and generate
-        text = processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        inputs = processor(text=[text], images=[image], return_tensors="pt", padding=True)
+        # For PALO, you'll likely need something like:
+        prompt = "Describe this image in Arabic."
+        inputs = processor(text=prompt, images=image, return_tensors="pt")
         inputs = inputs.to("cuda")
         
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                pad_token_id=processor.tokenizer.eos_token_id,
                 **config.GENERATION_CONFIG
             )
         
         response = processor.decode(outputs[0], skip_special_tokens=True)
-        
-        # Extract caption
-        if "assistant\n" in response:
-            arabic_caption = response.split("assistant\n")[-1].strip()
-        else:
-            arabic_caption = response.split("Describe this image in Arabic.")[-1].strip()
+        # Remove the prompt from response
+        arabic_caption = response.replace(prompt, "").strip()
         
         return {
             "image_file": image_file,
             "image_path": image_path,
             "arabic_caption": arabic_caption
         }
+
     
     def _save_evaluation_results(self, results: List[Dict]):
         """Save evaluation results to JSON and CSV."""

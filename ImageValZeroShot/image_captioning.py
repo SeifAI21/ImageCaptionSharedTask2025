@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Arabic Image Captioning using Qwen2.5-VL-7B-Instruct
+Arabic Image Captioning using Gemma model
 This script processes images and generates Arabic captions for historical content.
 """
 
@@ -10,25 +10,25 @@ import argparse
 import torch
 from PIL import Image
 from tqdm import tqdm
-from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
-from qwen_vl_utils import process_vision_info
+from transformers import AutoModelForVision2Seq, AutoProcessor
 
 
 class ArabicImageCaptioner:
-    """Class for generating Arabic captions for images using Qwen2.5-VL model."""
+    """Class for generating Arabic captions for images using Gemma model."""
     
-    def __init__(self, model_name="Qwen/Qwen2.5-VL-7B-Instruct", checkpoint_path=None):
+    def __init__(self, model_name="google/gemma-3n-E4B-it", checkpoint_path=None):
         """
         Initialize the captioner with the specified model.
         
         Args:
-            model_name (str): Name of the Qwen model to use
+            model_name (str): Name of the Gemma model to use
         """
         self.model_name = model_name
         self.model = None
         self.processor = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.checkpoint_path = checkpoint_path
+        
     def load_model(self):
         """Load the model and processor."""
         print(f"Loading model: {self.model_name}")
@@ -36,14 +36,17 @@ class ArabicImageCaptioner:
         
         loading_path = self.checkpoint_path if self.checkpoint_path else self.model_name
 
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+        self.model = AutoModelForVision2Seq.from_pretrained(
             loading_path,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=torch.float16,  # Changed from bfloat16
             device_map="auto",
-            attn_implementation="eager"
+            trust_remote_code=True  # Added for Gemma
         )
                 
-        self.processor = AutoProcessor.from_pretrained(self.model_name)
+        self.processor = AutoProcessor.from_pretrained(
+            self.model_name,
+            trust_remote_code=True  # Added for Gemma
+        )
         print("Model and processor loaded successfully!")
         
     def generate_caption(self, image_path, max_new_tokens=128):
@@ -58,55 +61,51 @@ class ArabicImageCaptioner:
             str: Generated Arabic caption
         """
         try:
-            image = Image.open(image_path)
+            image = Image.open(image_path).convert("RGB")
             
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "image": image},
-                        {
-                            "type": "text",
-                            "text": (
-                                "You are an expert in visual scene understanding and multilingual caption generation."
-                                "Analyze the content of this image, which is potentially related to the palestnian Nakba"
-                                "and Israeli occupation of Palestine, and provide a concise and meaningful caption in Arabic - about 15 to 50 words."
-                                "The caption should reflect the scene's content, emotional context, and should be natural and culturally appropriate."
-                                " Do not include any English or metadata — The caption must be in Arabic."
-                            ),
-                        },
-                    ],
-                }
-            ]
-            
-            text = self.processor.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
+            # Simplified prompt for Gemma (no chat template)
+            prompt = (
+                "You are an expert in visual scene understanding and multilingual caption generation. "
+                "Analyze the content of this image, which is potentially related to the Palestinian Nakba "
+                "and Israeli occupation of Palestine, and provide a concise and meaningful caption in Arabic - about 15 to 50 words. "
+                "The caption should reflect the scene's content, emotional context, and should be natural and culturally appropriate. "
+                "Do not include any English or metadata — The caption must be in Arabic."
             )
-            image_inputs, _ = process_vision_info(messages)
+            
+            # Process inputs for Gemma
             inputs = self.processor(
-                text=[text],
-                images=image_inputs,
-                padding=True,
-                return_tensors="pt",
+                text=prompt,
+                images=image,
+                return_tensors="pt"
             )
-            inputs = inputs.to(self.model.device)
+            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
             
             with torch.no_grad():
-                generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+                generated_ids = self.model.generate(
+                    **inputs, 
+                    max_new_tokens=max_new_tokens,
+                    do_sample=True,
+                    temperature=0.7,
+                    top_p=0.9,
+                    repetition_penalty=1.1
+                )
             
-            generated_ids_trimmed = [
-                out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-            ]
-            output_text = self.processor.batch_decode(
-                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            # Decode and clean output
+            output_text = self.processor.decode(
+                generated_ids[0], 
+                skip_special_tokens=True
             )
             
-            return output_text[0].strip()
+            # Remove the original prompt from output
+            arabic_caption = output_text.replace(prompt, "").strip()
+            
+            return arabic_caption
             
         except Exception as e:
             print(f"Error processing {image_path}: {e}")
             return ""
     
+    # ... rest of the methods remain the same ...
     def process_folder(self, image_folder, output_csv, supported_formats=('.png', '.jpg', '.jpeg')):
         """
         Process all images in a folder and save captions to CSV.
@@ -155,7 +154,7 @@ class ArabicImageCaptioner:
 def main():
     """Main function to handle command line arguments and run the captioning process."""
     parser = argparse.ArgumentParser(
-        description="Generate Arabic captions for images using Qwen2.5-VL model"
+        description="Generate Arabic captions for images using Gemma model"
     )
     parser.add_argument(
         "--image_folder", 
@@ -172,8 +171,8 @@ def main():
     parser.add_argument(
         "--model_name", 
         type=str, 
-        default="Qwen/Qwen2.5-VL-7B-Instruct",
-        help="Model name to use (default: Qwen/Qwen2.5-VL-7B-Instruct)"
+        default="google/gemma-3n-E4B-it",  # Changed default
+        help="Model name to use (default: google/gemma-3n-E4B-it)"
     )
     parser.add_argument(
         "--max_tokens", 
