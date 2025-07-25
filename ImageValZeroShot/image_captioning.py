@@ -28,8 +28,8 @@ class ArabicImageCaptioner:
             tokenizer=model_name,
             feature_extractor=model_name,
             device=0 if torch.cuda.is_available() else -1,
-            trust_remote_code=True,
-            use_auth_token=True
+            trust_remote_code=True
+            
         )
         print("Pipeline ready!\n")
 
